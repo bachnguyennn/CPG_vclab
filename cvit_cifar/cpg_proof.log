@@ -1,0 +1,26 @@
+
+=== [CViT-CPG] TASK 1/4: aquatic_mammals ===
+after task 1: aquati=56.4
+
+=== [CViT-CPG] TASK 2/4: fish ===
+after task 2: aquati=56.4  fish=72.4
+
+=== [CViT-CPG] TASK 3/4: flowers ===
+after task 3: aquati=56.2  fish=71.8  flower=69.6
+
+=== [CViT-CPG] TASK 4/4: food_containers ===
+after task 4: aquati=56.4  fish=71.8  flower=69.6  food_c=73.8
+
+==========================================================================
+CViT-CPG : per-task accuracy (row = task, col = measured after task N)
+==========================================================================
+task \ after      1      2      3      4
+aquatic_mamm   56.4   56.4   56.2   56.4
+fish            -     72.4   71.8   71.8
+flowers         -      -     69.6   69.6
+food_contain    -      -      -     73.8
+--------------------------------------------------------------------------
+max ACCURACY drift after a task learned : 0.600%
+Backward Transfer (BWT, ~0 = no forget) : -0.150%
+max FROZEN-WEIGHT drift (bit-exact)     : 0.00e+00
+max LOGIT drift (function preserved)    : 1.04e-01

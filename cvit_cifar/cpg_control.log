@@ -1,0 +1,24 @@
+
+=== [CONTROL (fine-tune)] TASK 1/4: aquatic_mammals ===
+after task 1: aquati=56.0
+
+=== [CONTROL (fine-tune)] TASK 2/4: fish ===
+after task 2: aquati=28.2  fish=71.4
+
+=== [CONTROL (fine-tune)] TASK 3/4: flowers ===
+after task 3: aquati=20.2  fish=28.8  flower=66.0
+
+=== [CONTROL (fine-tune)] TASK 4/4: food_containers ===
+after task 4: aquati=16.2  fish=20.2  flower=46.0  food_c=70.0
+
+==========================================================================
+CONTROL (fine-tune) : per-task accuracy (row = task, col = measured after task N)
+==========================================================================
+task \ after      1      2      3      4
+aquatic_mamm   56.0   28.2   20.2   16.2
+fish            -     71.4   28.8   20.2
+flowers         -      -     66.0   46.0
+food_contain    -      -      -     70.0
+--------------------------------------------------------------------------
+max ACCURACY drift after a task learned : 51.200%
+Backward Transfer (BWT, ~0 = no forget) : -27.750%

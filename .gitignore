@@ -9,3 +9,20 @@ official_CPG/checkpoints/
 __pycache__/
 *.pyc
 .text
+
+# Python venv
+.venv/
+official_CPG/.venv/
+
+# Large binaries: pretrained checkpoints + CIFAR npz cache (re-download / regenerate)
+*.pth
+*.npz
+
+# Upstream CascadedViT clone (has its own .git; re-clone from the vclab release)
+cascaded-vit/
+
+# Agent/AI-generated docs and helpers — keep only the technical report
+*.md
+!TECHNICAL_REPORT.md
+!official_CPG/README.md
+official_CPG/auto_finish.sh

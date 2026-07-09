@@ -232,7 +232,7 @@ class Manager(object):
 
         if resume_from_epoch > 0:
             filepath = self.args.checkpoint_format.format(save_folder=save_folder, epoch=resume_from_epoch)
-            checkpoint = torch.load(filepath)
+            checkpoint = torch.load(filepath, weights_only=False)
             checkpoint_keys = checkpoint.keys()
             state_dict = checkpoint['model_state_dict']
             curr_model_state_dict = self.model.module.state_dict()
@@ -265,7 +265,7 @@ class Manager(object):
 
         if resume_from_epoch > 0:
             filepath = self.args.checkpoint_format.format(save_folder=save_folder, epoch=resume_from_epoch)
-            checkpoint = torch.load(filepath)
+            checkpoint = torch.load(filepath, weights_only=False)
             checkpoint_keys = checkpoint.keys()
             state_dict = checkpoint['model_state_dict']
             curr_model_state_dict = self.model.module.state_dict()

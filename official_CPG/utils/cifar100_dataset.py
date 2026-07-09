@@ -21,7 +21,8 @@ def cifar100_train_loader(dataset_name, train_batch_size, num_workers=4, pin_mem
 
     return torch.utils.data.DataLoader(train_dataset,
         batch_size=train_batch_size, shuffle=True, sampler=None,
-        num_workers=num_workers, pin_memory=pin_memory)
+        num_workers=num_workers, pin_memory=pin_memory,
+        persistent_workers=(num_workers > 0))
 
 
 def cifar100_val_loader(dataset_name, val_batch_size, num_workers=4, pin_memory=True, normalize=None):
@@ -39,4 +40,5 @@ def cifar100_val_loader(dataset_name, val_batch_size, num_workers=4, pin_memory=
 
     return torch.utils.data.DataLoader(val_dataset,
         batch_size=val_batch_size, shuffle=False, sampler=None,
-        num_workers=num_workers, pin_memory=pin_memory)
+        num_workers=num_workers, pin_memory=pin_memory,
+        persistent_workers=(num_workers > 0))

@@ -1,0 +1,100 @@
+pretrained init: loaded 708 tensors (3.19M params, 99% of model), skipped 46
+  skipped by category: {'stem': 22, 'attn_bias': 10, 'head': 14}
+
+=== [CViT-CPG] TASK 1/20: aquatic_mammals ===
+after task 1: aquati=53.8
+
+=== [CViT-CPG] TASK 2/20: fish ===
+after task 2: aquati=53.8  fish=71.8
+
+=== [CViT-CPG] TASK 3/20: flowers ===
+after task 3: aquati=53.6  fish=71.8  flower=75.2
+
+=== [CViT-CPG] TASK 4/20: food_containers ===
+after task 4: aquati=53.6  fish=72.0  flower=75.2  food_c=73.4
+
+=== [CViT-CPG] TASK 5/20: fruit_and_vegetables ===
+after task 5: aquati=53.6  fish=71.8  flower=75.2  food_c=73.4  fruit_=81.4
+
+=== [CViT-CPG] TASK 6/20: household_electrical_devices ===
+after task 6: aquati=53.8  fish=72.0  flower=75.0  food_c=73.2  fruit_=81.6  househ=74.8
+
+=== [CViT-CPG] TASK 7/20: household_furniture ===
+after task 7: aquati=53.4  fish=71.8  flower=74.8  food_c=73.0  fruit_=81.6  househ=74.8  househ=74.4
+
+=== [CViT-CPG] TASK 8/20: insects ===
+after task 8: aquati=52.6  fish=71.6  flower=74.8  food_c=73.0  fruit_=81.8  househ=74.8  househ=74.4  insect=77.8
+
+=== [CViT-CPG] TASK 9/20: large_carnivores ===
+after task 9: aquati=53.0  fish=71.2  flower=74.4  food_c=73.4  fruit_=81.8  househ=74.8  househ=74.6  insect=78.0  large_=78.4
+
+=== [CViT-CPG] TASK 10/20: large_man-made_outdoor_things ===
+after task 10: aquati=53.2  fish=71.2  flower=74.6  food_c=73.4  fruit_=82.0  househ=74.8  househ=74.6  insect=78.0  large_=78.6  large_=84.6
+
+=== [CViT-CPG] TASK 11/20: large_natural_outdoor_scenes ===
+after task 11: aquati=53.0  fish=71.6  flower=74.6  food_c=73.4  fruit_=81.8  househ=74.8  househ=74.6  insect=78.0  large_=78.2  large_=84.6  large_=86.0
+
+=== [CViT-CPG] TASK 12/20: large_omnivores_and_herbivores ===
+after task 12: aquati=53.8  fish=71.8  flower=74.4  food_c=73.4  fruit_=81.8  househ=74.8  househ=74.8  insect=78.4  large_=78.2  large_=84.6  large_=86.2  large_=73.2
+
+=== [CViT-CPG] TASK 13/20: medium_mammals ===
+after task 13: aquati=53.6  fish=71.8  flower=74.4  food_c=73.4  fruit_=81.8  househ=74.8  househ=74.8  insect=78.2  large_=78.2  large_=84.6  large_=86.2  large_=72.8  medium=77.8
+
+=== [CViT-CPG] TASK 14/20: non-insect_invertebrates ===
+after task 14: aquati=53.6  fish=71.6  flower=74.6  food_c=73.4  fruit_=81.8  househ=75.0  househ=74.8  insect=78.4  large_=78.2  large_=84.6  large_=86.2  large_=73.0  medium=77.8  non-in=71.0
+
+=== [CViT-CPG] TASK 15/20: people ===
+after task 15: aquati=53.4  fish=71.4  flower=74.6  food_c=73.4  fruit_=81.8  househ=74.8  househ=74.8  insect=78.4  large_=78.2  large_=84.8  large_=86.2  large_=73.2  medium=77.8  non-in=70.8  people=46.6
+
+=== [CViT-CPG] TASK 16/20: reptiles ===
+after task 16: aquati=53.4  fish=71.0  flower=74.8  food_c=73.6  fruit_=81.6  househ=75.0  househ=74.6  insect=78.4  large_=78.0  large_=84.8  large_=86.2  large_=73.2  medium=77.6  non-in=70.4  people=46.0  reptil=67.2
+
+=== [CViT-CPG] TASK 17/20: small_mammals ===
+after task 17: aquati=53.6  fish=71.0  flower=74.6  food_c=73.6  fruit_=81.6  househ=75.0  househ=74.8  insect=78.6  large_=77.8  large_=85.0  large_=86.4  large_=72.8  medium=77.8  non-in=70.8  people=46.4  reptil=67.0  small_=62.8
+
+=== [CViT-CPG] TASK 18/20: trees ===
+after task 18: aquati=53.8  fish=70.6  flower=74.4  food_c=73.6  fruit_=81.8  househ=74.8  househ=75.2  insect=78.6  large_=77.8  large_=84.8  large_=86.2  large_=72.8  medium=78.0  non-in=70.6  people=46.4  reptil=67.6  small_=62.8  trees=63.4
+
+=== [CViT-CPG] TASK 19/20: vehicles_1 ===
+after task 19: aquati=53.2  fish=70.6  flower=74.4  food_c=73.8  fruit_=81.8  househ=74.8  househ=75.2  insect=78.2  large_=77.8  large_=84.8  large_=86.0  large_=72.8  medium=78.2  non-in=70.6  people=46.2  reptil=67.4  small_=62.8  trees=63.4  vehicl=76.4
+
+=== [CViT-CPG] TASK 20/20: vehicles_2 ===
+after task 20: aquati=53.2  fish=70.6  flower=74.6  food_c=74.0  fruit_=81.8  househ=74.6  househ=75.2  insect=78.2  large_=77.4  large_=84.8  large_=86.0  large_=72.6  medium=78.2  non-in=70.4  people=46.6  reptil=67.4  small_=62.8  trees=63.6  vehicl=76.6  vehicl=86.8
+
+==========================================================================
+CViT-CPG : per-task accuracy (row = task, col = measured after task N)
+==========================================================================
+task \ after      1      2      3      4      5      6      7      8      9     10     11     12     13     14     15     16     17     18     19     20
+aquatic_mamm   53.8   53.8   53.6   53.6   53.6   53.8   53.4   52.6   53.0   53.2   53.0   53.8   53.6   53.6   53.4   53.4   53.6   53.8   53.2   53.2
+fish            -     71.8   71.8   72.0   71.8   72.0   71.8   71.6   71.2   71.2   71.6   71.8   71.8   71.6   71.4   71.0   71.0   70.6   70.6   70.6
+flowers         -      -     75.2   75.2   75.2   75.0   74.8   74.8   74.4   74.6   74.6   74.4   74.4   74.6   74.6   74.8   74.6   74.4   74.4   74.6
+food_contain    -      -      -     73.4   73.4   73.2   73.0   73.0   73.4   73.4   73.4   73.4   73.4   73.4   73.4   73.6   73.6   73.6   73.8   74.0
+fruit_and_ve    -      -      -      -     81.4   81.6   81.6   81.8   81.8   82.0   81.8   81.8   81.8   81.8   81.8   81.6   81.6   81.8   81.8   81.8
+household_el    -      -      -      -      -     74.8   74.8   74.8   74.8   74.8   74.8   74.8   74.8   75.0   74.8   75.0   75.0   74.8   74.8   74.6
+household_fu    -      -      -      -      -      -     74.4   74.4   74.6   74.6   74.6   74.8   74.8   74.8   74.8   74.6   74.8   75.2   75.2   75.2
+insects         -      -      -      -      -      -      -     77.8   78.0   78.0   78.0   78.4   78.2   78.4   78.4   78.4   78.6   78.6   78.2   78.2
+large_carniv    -      -      -      -      -      -      -      -     78.4   78.6   78.2   78.2   78.2   78.2   78.2   78.0   77.8   77.8   77.8   77.4
+large_man-ma    -      -      -      -      -      -      -      -      -     84.6   84.6   84.6   84.6   84.6   84.8   84.8   85.0   84.8   84.8   84.8
+large_natura    -      -      -      -      -      -      -      -      -      -     86.0   86.2   86.2   86.2   86.2   86.2   86.4   86.2   86.0   86.0
+large_omnivo    -      -      -      -      -      -      -      -      -      -      -     73.2   72.8   73.0   73.2   73.2   72.8   72.8   72.8   72.6
+medium_mamma    -      -      -      -      -      -      -      -      -      -      -      -     77.8   77.8   77.8   77.6   77.8   78.0   78.2   78.2
+non-insect_i    -      -      -      -      -      -      -      -      -      -      -      -      -     71.0   70.8   70.4   70.8   70.6   70.6   70.4
+people          -      -      -      -      -      -      -      -      -      -      -      -      -      -     46.6   46.0   46.4   46.4   46.2   46.6
+reptiles        -      -      -      -      -      -      -      -      -      -      -      -      -      -      -     67.2   67.0   67.6   67.4   67.4
+small_mammal    -      -      -      -      -      -      -      -      -      -      -      -      -      -      -      -     62.8   62.8   62.8   62.8
+trees           -      -      -      -      -      -      -      -      -      -      -      -      -      -      -      -      -     63.4   63.4   63.6
+vehicles_1      -      -      -      -      -      -      -      -      -      -      -      -      -      -      -      -      -      -     76.4   76.6
+vehicles_2      -      -      -      -      -      -      -      -      -      -      -      -      -      -      -      -      -      -      -     86.8
+--------------------------------------------------------------------------
+avg RETAINED accuracy (after all tasks)  : 72.77%
+max ACCURACY drift after a task learned  : 1.200%
+Backward Transfer (BWT, ~0 = no forget)  : -0.070%
+max FROZEN-WEIGHT drift (bit-exact)      : 0.00e+00
+max LOGIT drift (function preserved)     : 1.33e+00
+
+continual Accuracy-Per-FLOP (cAPF = retained_acc / inference GFLOPs):
+  CViT-CPG (ours) : 72.77% / 0.0495 GFLOPs = 1469.0 %/GFLOP  (3.22M params)
+  VGG16-CPG (ref) : 78.60% / 0.7467 GFLOPs = 105.3 %/GFLOP
+  -> CViT-CPG cAPF is 14.0x higher
+
+wrote cvit_cpg_20task_M_pre.txt

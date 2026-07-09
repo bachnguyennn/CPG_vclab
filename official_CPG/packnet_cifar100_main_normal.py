@@ -108,7 +108,7 @@ def main():
 
     if resume_from_epoch:
         filepath = args.checkpoint_format.format(save_folder=resume_folder, epoch=resume_from_epoch)
-        checkpoint = torch.load(filepath)
+        checkpoint = torch.load(filepath, weights_only=False)
         checkpoint_keys = checkpoint.keys()
         dataset_history = checkpoint['dataset_history']
         dataset2num_classes = checkpoint['dataset2num_classes']
@@ -160,7 +160,7 @@ def main():
         if filepath == '':
             pdb.set_trace()
             print('Something is wrong')
-        checkpoint = torch.load(filepath)
+        checkpoint = torch.load(filepath, weights_only=False)
         state_dict = checkpoint['model_state_dict']
         curr_model_state_dict = model.module.state_dict()
 
