@@ -12,7 +12,7 @@ import time
 
 import torch
 
-from model_cifar import build_cvit_cifar
+from model_cifar import build_cvit_cifar, build_cvit_hires
 
 DEVICE = torch.device('cuda')
 BATCH = 128
@@ -31,9 +31,9 @@ def gpu_power_w():
 
 
 @torch.no_grad()
-def bench(model, name):
+def bench(model, name, img_size=32):
     model.to(DEVICE).eval()   # to() before eval(): attention caches self.ab at eval time
-    x = torch.randn(BATCH, 3, 32, 32, device=DEVICE)
+    x = torch.randn(BATCH, 3, img_size, img_size, device=DEVICE)
     for _ in range(WARMUP):
         model(x)
     torch.cuda.synchronize()
@@ -78,4 +78,6 @@ if __name__ == '__main__':
     print('-' * 66)
     for v in ('S', 'M', 'L', 'XL'):
         bench(build_cvit_cifar(v, 5), 'CViT-' + v)
+    for v in ('S', 'XL'):   # hires (stride-16 stem) headline points
+        bench(build_cvit_hires(v, 5, img_size=128), 'CViT-{}@128'.format(v), img_size=128)
     bench(vgg16_cpg(1.5), 'VGG16-CPG@1.5')

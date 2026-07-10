@@ -159,15 +159,19 @@ def main():
     ap.add_argument('--variant', type=str, default='S', choices=['S', 'M', 'L', 'XL'])
     ap.add_argument('--width-mult', type=float, default=1.0, help='CViT width multiplier (capacity)')
     ap.add_argument('--pretrained', action='store_true', help='init backbone from ImageNet CViT weights')
+    ap.add_argument('--img-size', type=int, default=32,
+                    help='input resolution; >32 upsamples CIFAR and uses the stock stride-16 stem (full ckpt transfer)')
+    ap.add_argument('--seed', type=int, default=1)
     ap.add_argument('--results-file', type=str, default='')
     args = ap.parse_args()
 
-    torch.manual_seed(1)
+    torch.manual_seed(args.seed)
     # deterministic eval so the accuracy/logit drift reflects the mechanism, not cuDNN autotuning
     torch.backends.cudnn.benchmark = False
     torch.backends.cudnn.deterministic = True
 
-    model = SharableCViT(variant=args.variant, width_mult=args.width_mult).to(DEVICE)
+    model = SharableCViT(variant=args.variant, width_mult=args.width_mult,
+                         img_size=args.img_size).to(DEVICE)
     if args.pretrained:
         from pretrained_init import load_pretrained
         from model_cifar import CKPT
@@ -182,7 +186,8 @@ def main():
     tasks = TASKS[:args.tasks]
     for k, task in enumerate(tasks, start=1):
         model.add_dataset(task, 5)
-        train_loader, test_loader = get_task_loaders(task, batch_size=64, workers=args.workers)
+        train_loader, test_loader = get_task_loaders(task, batch_size=64, workers=args.workers,
+                                                     img_size=args.img_size)
         test_loaders[task] = test_loader
         print('\n=== [{}] TASK {}/{}: {} ==='.format(tag, k, len(tasks), task), flush=True)
 
@@ -240,7 +245,8 @@ def main():
 
     # ---- continual Accuracy-Per-FLOP (cAPF) vs VGG16-CPG ----
     from measure_flops import count
-    gflops, mparams = count(SharableCViT_forflops(args.variant, args.width_mult))
+    gflops, mparams = count(SharableCViT_forflops(args.variant, args.width_mult, args.img_size),
+                            size=args.img_size)
     capf = avg_retained / gflops
     VGG_ACC, VGG_GFLOPS = 78.6, 0.7467  # our VGG16-CPG reproduction @1.5x, 32x32
     vgg_capf = VGG_ACC / VGG_GFLOPS
@@ -264,8 +270,8 @@ def main():
         print('\nwrote', args.results_file)
 
 
-def SharableCViT_forflops(variant='S', width_mult=1.0):
-    m = SharableCViT(variant=variant, width_mult=width_mult)
+def SharableCViT_forflops(variant='S', width_mult=1.0, img_size=32):
+    m = SharableCViT(variant=variant, width_mult=width_mult, img_size=img_size)
     m.add_dataset('t', 5)
     m.set_dataset('t')
     return m

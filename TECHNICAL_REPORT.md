@@ -336,7 +336,28 @@ The honest reading, which strengthens rather than weakens the thesis:
 - Therefore FLOPs and params (37.6x / 44x) plus measured energy (~1.5x) support the efficiency claim; the *latency* advantage is an edge/mobile claim (compute-bound devices), consistent with how the CascadedViT paper positions the architecture. Reporting this distinction explicitly is more defensible than quoting FLOPs alone.
 - Measurement gotcha: `model.to(DEVICE)` must be called **before** `model.eval()` — CViT's attention caches its bias tensor (`self.ab`) at eval time, and the cached copy stays on the wrong device otherwise.
 
-### 9.6 Consolidated result narrative
+### 9.6 The resolution axis: full pretrained transfer (accuracy parity and beyond)
+
+The remaining accuracy gap to VGG traced not to architecture or capacity but to *incomplete pretrained transfer*: the 32x32 build amputates the checkpoint's stride-16 stem (random-init stride-4 replacement) and cannot use the stage-2/3 attention-bias tables. The fix is to upsample CIFAR to 128x128 (bicubic) and keep the **stock stride-16 stem**: internal resolution is then 128/16 = 8 — identical block geometry and near-identical compute (0.0230 vs 0.0198 GFLOPs for S) — but the **entire checkpoint now transfers** (831 tensors for S including the stem; mismatched attention-bias tables are bicubically interpolated over their relative-offset grids, the standard ViT position-embedding interpolation). Note that upsampling adds no information to a 32x32 image; the gain is from unlocking pretrained knowledge and matching the backbone's pretraining input statistics, not from resolution per se.
+
+Identical recipe to all family runs:
+
+| Backbone | GFLOPs | Retained acc | BWT | Frozen-wt drift | cAPF | vs VGG |
+|----------|:------:|:---:|:---:|:---:|:---:|:---:|
+| CViT-S @128 | 0.0230 | 80.27 % | -0.04 % | 0.00e+00 | 3495 | 33.2x |
+| CViT-XL @128 | 0.1467 | 82.71 % | +0.10 % | 0.00e+00 | 564 | 5.4x |
+| VGG16-CPG (repro) | 0.7467 | 78.61 % | ~0 | — | 105 | 1x |
+| CPG paper (VGG16) | 0.7467 | 81.2 % | ~0 | — | 109 | — |
+
+Findings:
+
+1. **CViT-S @128 exceeds our VGG16-CPG reproduction** (80.27 vs 78.61 %) at 32x fewer FLOPs; **CViT-XL @128 exceeds the original paper's published average** (82.71 vs 81.2 %) at 5x fewer FLOPs. Accuracy parity is achieved with the efficiency claim intact.
+2. **Attribution is clean**: partial transfer at 32px was worth +1.4 pts; full transfer at 128px is worth +8.1 (S) and +8.4 (XL) at the same internal geometry — the jump appears exactly when the stem transfers, identifying transfer completeness (not resolution) as the mechanism.
+3. **Zero forgetting is resolution-independent**: frozen-weight drift 0.00e+00 and |BWT| <= 0.10 % at 128px for both variants.
+4. Per-task, every superclass improves; the historically hardest tasks improve most in relative terms (aquatic_mammals 57.2 -> 69.6 for XL, people 44.0 -> 53.6, above VGG's 50.6).
+5. **Hardware cost of the resolution move is negligible** (measured, RTX 3060, batch 128): the stride-16 stem absorbs the larger input, so S@128 matches the 32px latency (0.211 ms/img) and still undercuts VGG's energy (19.7 vs 26.0 mJ/img) while exceeding its accuracy; XL@128 is 0.254 ms/img / 32.2 mJ/img (~1.2x VGG energy) for +4.1 accuracy points over the reproduction.
+
+### 9.7 Consolidated result narrative
 
 | Experiment | Configuration | Retained acc | cAPF | Key takeaway |
 |-----------|---------------|:---:|:---:|--------------|
@@ -347,8 +368,10 @@ The honest reading, which strengthens rather than weakens the thesis:
 | Pretrained S | ImageNet init | 72.17 % | 3636 | Only lever that helped (+1.4) |
 | Family | S / M / L / XL pretrained | 72.2 / 72.8 / 72.8 / 74.3 % | 3636 / 1469 / 1020 / 604 | Depth beats width; Pareto frontier |
 | Growing | width 1.0 -> 1.5 transfer | logit drift 0.978 | — | Negative result: chunk routing breaks naive growth |
+| Resolution S | S @128, full ckpt transfer | 80.27 % | 3495 | Beats VGG repro at 32x fewer FLOPs |
+| Resolution XL | XL @128, full ckpt transfer | 82.71 % | 564 | Beats the original CPG paper at 5x fewer FLOPs |
 
-**One-line claim:** Zero-forgetting continual learning (bit-exact, checksum-verified) on the CascadedViT family achieves 5.7–34.5x higher continual Accuracy-Per-FLOP than VGG16-CPG, with the efficiency frontier at CViT-S and the accuracy frontier at CViT-XL (74.3 %, within 4.3 pts of VGG at 6x fewer FLOPs and lower measured energy).
+**One-line claim:** Zero-forgetting continual learning (bit-exact, checksum-verified) on the CascadedViT family matches and exceeds the original CPG paper's accuracy (82.7 % vs 81.2 % with CViT-XL at 128px input) at 5x fewer inference FLOPs, exceeds the VGG16-CPG reproduction at 32x fewer FLOPs (CViT-S @128, 80.3 %), and preserves the bit-exact zero-forgetting guarantee at every model size and resolution.
 
 ---
 

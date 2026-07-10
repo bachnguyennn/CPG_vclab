@@ -70,15 +70,17 @@ def _load_npz():
 
 
 class _TaskDS(Dataset):
-    def __init__(self, arr, labels, train):
+    def __init__(self, arr, labels, train, img_size=32):
         self.arr = arr
         self.labels = labels
         norm = T.Normalize(CIFAR100_MEAN, CIFAR100_STD)
+        ops = []
+        if img_size != 32:   # upsample for the hires (stride-16 stem) build
+            ops.append(T.Resize(img_size, interpolation=T.InterpolationMode.BICUBIC))
         if train:
-            self.tf = T.Compose([T.RandomCrop(32, padding=4), T.RandomHorizontalFlip(),
-                                 T.ToTensor(), norm])
-        else:
-            self.tf = T.Compose([T.ToTensor(), norm])
+            ops += [T.RandomCrop(img_size, padding=img_size // 8), T.RandomHorizontalFlip()]
+        ops += [T.ToTensor(), norm]
+        self.tf = T.Compose(ops)
 
     def __len__(self):
         return len(self.labels)
@@ -95,15 +97,15 @@ def _subset(x, y, fine_idx):
     return xs, ys
 
 
-def get_task_loaders(task, batch_size=64, workers=4):
+def get_task_loaders(task, batch_size=64, workers=4, img_size=32):
     tr_x, tr_y, te_x, te_y = _load_npz()
     fine = TASK_FINE_IDX[task]
     trx, tryy = _subset(tr_x, tr_y, fine)
     tex, tey = _subset(te_x, te_y, fine)
-    train_loader = DataLoader(_TaskDS(trx, tryy, True), batch_size=batch_size, shuffle=True,
+    train_loader = DataLoader(_TaskDS(trx, tryy, True, img_size), batch_size=batch_size, shuffle=True,
                               num_workers=workers, pin_memory=True,
                               persistent_workers=(workers > 0), drop_last=True)
-    test_loader = DataLoader(_TaskDS(tex, tey, False), batch_size=256, shuffle=False,
+    test_loader = DataLoader(_TaskDS(tex, tey, False, img_size), batch_size=256, shuffle=False,
                              num_workers=workers, pin_memory=True,
                              persistent_workers=(workers > 0))
     return train_loader, test_loader

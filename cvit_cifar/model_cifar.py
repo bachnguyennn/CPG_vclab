@@ -56,6 +56,24 @@ def build_cvit_cifar(variant='S', num_classes=100, width_mult=1.0):
     return model
 
 
+def build_cvit_hires(variant='S', num_classes=100, img_size=128):
+    """Upsampled-input build with the ORIGINAL stride-16 stem.
+
+    img_size=128 -> internal resolution 128//16 = 8, i.e. the SAME block/
+    attention geometry as the 32x32 stride-4 build, but the released
+    checkpoint's stem now shape-matches and transfers (full pretrained init).
+    img_size=224 reproduces the released geometry exactly (resolution 14).
+    """
+    assert img_size % 16 == 0, 'stride-16 stem needs img_size divisible by 16'
+    cfg = dict(_COMMON)
+    cfg.update(VARIANT_CFGS[variant])
+    cfg['img_size'] = img_size
+    cfg['patch_size'] = 16
+    model = CascadedViT(num_classes=num_classes, **cfg)
+    model.embed_dim = cfg['embed_dim']
+    return model
+
+
 def build_cvit_s_cifar(num_classes=100, width_mult=1.0):
     """Back-compat alias for the S variant."""
     return build_cvit_cifar('S', num_classes, width_mult)

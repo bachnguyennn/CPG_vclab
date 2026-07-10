@@ -22,16 +22,22 @@ _CVIT = os.path.join(os.path.dirname(__file__), '..', 'cascaded-vit', 'classific
 sys.path.insert(0, _CVIT)
 from model.cascadedvit import BN_Linear  # noqa: E402
 
-from model_cifar import build_cvit_cifar
+from model_cifar import build_cvit_cifar, build_cvit_hires
 from sharable_cascadedvit import convert_all_convs_to_sharable, SharableConv2d
 
 
 class SharableCViT(nn.Module):
-    def __init__(self, variant='S', width_mult=1.0):
+    def __init__(self, variant='S', width_mult=1.0, img_size=32):
         super().__init__()
         self.variant = variant
         self.width_mult = width_mult
-        base = build_cvit_cifar(variant, num_classes=0, width_mult=width_mult)  # num_classes=0 -> head Identity
+        self.img_size = img_size
+        if img_size == 32:
+            base = build_cvit_cifar(variant, num_classes=0, width_mult=width_mult)  # num_classes=0 -> head Identity
+        else:
+            # upsampled input + stock stride-16 stem -> full checkpoint transfer
+            assert width_mult == 1.0, 'hires build keeps the checkpoint widths'
+            base = build_cvit_hires(variant, num_classes=0, img_size=img_size)
         self.embed_last = base.embed_dim[-1]  # head input dim (scales with width)
         # convert EVERY backbone conv (incl. SqueezeExcite) to SharableConv2d
         self.n_sharable = convert_all_convs_to_sharable(base)
