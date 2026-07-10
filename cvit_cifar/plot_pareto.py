@@ -11,7 +11,9 @@ import matplotlib.pyplot as plt
 
 # (name, GFLOPs, retained acc %)
 CVIT_32 = [('S', 0.0198, 72.17), ('M', 0.0495, 72.77), ('L', 0.0714, 72.84), ('XL', 0.1232, 74.34)]
-CVIT_128 = [('S@128', 0.0230, 80.27), ('XL@128', 0.1467, 82.71)]
+# @128 points: mean over 3 seeds, with std as error bars
+# S@128: 80.27 / 79.94 / 79.98   XL@128: 82.71 / 81.91 / 82.25
+CVIT_128 = [('S@128', 0.0230, 80.06, 0.18), ('XL@128', 0.1467, 82.29, 0.40)]
 VGG_REPRO = ('VGG16-CPG (repro)', 0.7467, 78.61)
 VGG_PAPER = ('CPG paper (VGG16)', 0.7467, 81.2)
 
@@ -23,9 +25,12 @@ for n, x, y in CVIT_32:
     ax.annotate(n, (x, y), textcoords='offset points', xytext=(0, -14), ha='center', fontsize=9, color='#4878CF')
 
 xs, ys = [p[1] for p in CVIT_128], [p[2] for p in CVIT_128]
-ax.plot(xs, ys, 's-', color='#D65F5F', lw=1.8, ms=8, label='CViT-CPG @128 (full pretrained transfer)')
-for n, x, y in CVIT_128:
-    ax.annotate(n, (x, y), textcoords='offset points', xytext=(0, 9), ha='center', fontsize=9,
+errs = [p[3] for p in CVIT_128]
+ax.errorbar(xs, ys, yerr=errs, fmt='s-', color='#D65F5F', lw=1.8, ms=8,
+            capsize=4, ecolor='#D65F5F', elinewidth=1.2,
+            label='CViT-CPG @128 (full pretrained transfer, mean ± std, 3 seeds)')
+for n, x, y, e in CVIT_128:
+    ax.annotate(n, (x, y), textcoords='offset points', xytext=(0, 11), ha='center', fontsize=9,
                 color='#D65F5F', fontweight='bold')
 
 ax.plot(VGG_REPRO[1], VGG_REPRO[2], 'D', color='#555555', ms=9, label=VGG_REPRO[0])
@@ -37,7 +42,7 @@ ax.annotate('CPG paper (81.2)', (VGG_PAPER[1], VGG_PAPER[2]),
 
 ax.axhline(VGG_PAPER[2], color='#999999', lw=0.8, ls=':')
 # arrows showing the resolution unlock (same geometry, full transfer)
-for (na, xa, ya), (nb, xb, yb) in ((CVIT_32[0], CVIT_128[0]), (CVIT_32[3], CVIT_128[1])):
+for (na, xa, ya), (nb, xb, yb, _) in ((CVIT_32[0], CVIT_128[0]), (CVIT_32[3], CVIT_128[1])):
     ax.annotate('', xy=(xb, yb), xytext=(xa, ya),
                 arrowprops=dict(arrowstyle='->', color='#BBBBBB', lw=1.0, ls='--'))
 
