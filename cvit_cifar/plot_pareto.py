@@ -14,8 +14,9 @@ CVIT_32 = [('S', 0.0198, 72.17), ('M', 0.0495, 72.77), ('L', 0.0714, 72.84), ('X
 # @128 points: mean over 3 seeds, with std as error bars
 # S@128: 80.27 / 79.94 / 79.98   XL@128: 82.71 / 81.91 / 82.25
 CVIT_128 = [('S@128', 0.0230, 80.06, 0.18), ('XL@128', 0.1467, 82.29, 0.40)]
-VGG_REPRO = ('VGG16-CPG (repro)', 0.7467, 78.61)
+VGG_REPRO = ('VGG16-CPG (repro, scratch)', 0.7467, 78.61)
 VGG_PAPER = ('CPG paper (VGG16)', 0.7467, 81.2)
+VGG_PRETR = ('VGG16-CPG (ImageNet-pretrained)', 0.7467, 81.66)
 
 fig, ax = plt.subplots(figsize=(7.0, 4.6))
 
@@ -38,7 +39,10 @@ ax.annotate('VGG16-CPG\n(our repro, 78.6)', (VGG_REPRO[1], VGG_REPRO[2]),
             textcoords='offset points', xytext=(-8, -26), ha='right', fontsize=8.5, color='#555555')
 ax.plot(VGG_PAPER[1], VGG_PAPER[2], 'D', mfc='none', mec='#555555', ms=9, label=VGG_PAPER[0])
 ax.annotate('CPG paper (81.2)', (VGG_PAPER[1], VGG_PAPER[2]),
-            textcoords='offset points', xytext=(-8, 6), ha='right', fontsize=8.5, color='#555555')
+            textcoords='offset points', xytext=(-8, -16), ha='right', fontsize=8.5, color='#555555')
+ax.plot(VGG_PRETR[1], VGG_PRETR[2], 'v', color='#B8860B', ms=9, label=VGG_PRETR[0])
+ax.annotate('VGG16-CPG pretrained (81.7)', (VGG_PRETR[1], VGG_PRETR[2]),
+            textcoords='offset points', xytext=(-8, 8), ha='right', fontsize=8.5, color='#B8860B')
 
 ax.axhline(VGG_PAPER[2], color='#999999', lw=0.8, ls=':')
 # arrows showing the resolution unlock (same geometry, full transfer)

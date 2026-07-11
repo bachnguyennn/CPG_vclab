@@ -1,0 +1,26 @@
+CPG CIFAR-100 20-task reproduction (VGG16, imagenet_mul_1.5)
+==============================================================================
+#   task                                  ours    paper    diff
+------------------------------------------------------------------------------
+1   aquatic_mammals                      71.80     65.2   +6.60
+2   fish                                 82.40     76.6   +5.80
+3   flowers                              79.40     79.8   -0.40
+4   food_containers                      84.60     81.4   +3.20
+5   fruit_and_vegetables                 88.80     86.6   +2.20
+6   household_electrical_devices         87.20     84.8   +2.40
+7   household_furniture                  84.40     83.4   +1.00
+8   insects                              84.20     85.0   -0.80
+9   large_carnivores                     84.40     84.2   +0.20
+10  large_man-made_outdoor_things        89.00     89.2   -0.20
+11  large_natural_outdoor_scenes         88.00     90.8   -2.80
+12  large_omnivores_and_herbivores       82.80     82.4   +0.40
+13  medium_mammals                       89.80     85.6   +4.20
+14  non-insect_invertebrates             82.20     85.2   -3.00
+15  people                               51.80     53.2   -1.40
+16  reptiles                             75.80     84.4   -8.60
+17  small_mammals                        71.20     70.0   +1.20
+18  trees                                74.00     73.4   +0.60
+19  vehicles_1                           88.20     88.8   -0.60
+20  vehicles_2                           93.20     94.8   -1.60
+------------------------------------------------------------------------------
+    AVERAGE                              81.66     81.2   +0.42

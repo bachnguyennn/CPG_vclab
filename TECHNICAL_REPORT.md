@@ -346,8 +346,9 @@ Identical recipe to all family runs:
 |----------|:------:|:---:|:---:|:---:|:---:|:---:|
 | CViT-S @128 | 0.0230 | 80.06 ± 0.18 % (3 seeds) | -0.04 / +0.13 / -0.11 % | 0.00e+00 (all) | 3482–3495 | 33.1x |
 | CViT-XL @128 | 0.1467 | 82.29 ± 0.40 % (3 seeds) | +0.10 / -0.09 / +0.02 % | 0.00e+00 (all) | 559–564 | 5.3x |
-| VGG16-CPG (repro) | 0.7467 | 78.61 % | ~0 | — | 105 | 1x |
-| CPG paper (VGG16) | 0.7467 | 81.2 % | ~0 | — | 109 | — |
+| VGG16-CPG (repro, scratch) | 0.7467 | 78.61 % | ~0 | — | 105 | 1x |
+| VGG16-CPG (ImageNet-pretrained) | 0.7467 | 81.66 % | ~0 | — | 109 | 1.04x |
+| CPG paper (VGG16, scratch) | 0.7467 | 81.2 % | ~0 | — | 109 | — |
 
 Findings:
 
@@ -356,7 +357,8 @@ Findings:
 3. **Attribution is clean**: partial transfer at 32px was worth +1.4 pts; full transfer at 128px is worth +7.9 (S) and +8.0 (XL) in seed-mean terms at the same internal geometry — the jump appears exactly when the stem transfers, identifying transfer completeness (not resolution) as the mechanism.
 4. **Zero forgetting is resolution-independent**: frozen-weight drift 0.00e+00 and |BWT| <= 0.13 % at 128px for both variants across all seeds.
 5. Per-task, every superclass improves; the historically hardest tasks improve most in relative terms (aquatic_mammals 57.2 -> 69.6 for XL, people 44.0 -> 53.6, above VGG's 50.6).
-6. **Hardware cost of the resolution move is negligible** (measured, RTX 3060, batch 128): the stride-16 stem absorbs the larger input, so S@128 matches the 32px latency (0.211 ms/img) and still undercuts VGG's energy (19.7 vs 26.0 mJ/img) while exceeding its accuracy; XL@128 is 0.254 ms/img / 32.2 mJ/img (~1.2x VGG energy) for +4.1 accuracy points over the reproduction.
+6. **The comparison survives symmetric pretraining (fairness control).** Giving VGG16-CPG the same advantage — ImageNet vgg16_bn init (65 tensors / 14.73M params: the complete conv stack + BN statistics, transferred via the official pipeline with the identical growth/pruning protocol; final width 1.5, same 0.7467 GFLOPs) — lifts it from 78.61 to **81.66 %** (+3.05, and +0.42 over the paper's scratch number). CViT-XL@128 (82.29 ± 0.40) still exceeds this pretrained baseline on every seed at 5x fewer FLOPs, and CViT-S@128 (80.06 ± 0.18) trails it by only 1.6 pts at 32x fewer FLOPs. Pretraining is worth +3.05 on VGG but +7.9 on CViT — the efficient ViT converts pretrained knowledge into continual-learning accuracy more effectively than the CNN under the same CPG mechanism. Result file: `official_CPG/logs/cpg_results_imagenet.txt`.
+7. **Hardware cost of the resolution move is negligible** (measured, RTX 3060, batch 128): the stride-16 stem absorbs the larger input, so S@128 matches the 32px latency (0.211 ms/img) and still undercuts VGG's energy (19.7 vs 26.0 mJ/img) while exceeding its accuracy; XL@128 is 0.254 ms/img / 32.2 mJ/img (~1.2x VGG energy) for +4.1 accuracy points over the reproduction.
 
 ### 9.7 Consolidated result narrative
 
@@ -371,8 +373,9 @@ Findings:
 | Growing | width 1.0 -> 1.5 transfer | logit drift 0.978 | — | Negative result: chunk routing breaks naive growth |
 | Resolution S | S @128, full ckpt transfer | 80.06 ± 0.18 % (3 seeds) | ~3490 | Beats VGG repro at 32x fewer FLOPs, every seed |
 | Resolution XL | XL @128, full ckpt transfer | 82.29 ± 0.40 % (3 seeds) | ~561 | Beats the original CPG paper at 5x fewer FLOPs, every seed |
+| Fairness control | VGG16-CPG, ImageNet init | 81.66 % | 109 | XL@128 still wins with symmetric pretraining |
 
-**One-line claim:** Zero-forgetting continual learning (bit-exact, checksum-verified) on the CascadedViT family matches and exceeds the original CPG paper's accuracy (82.3 ± 0.4 % over 3 seeds vs 81.2 % with CViT-XL at 128px input, every seed above) at 5x fewer inference FLOPs, exceeds the VGG16-CPG reproduction at 32x fewer FLOPs (CViT-S @128, 80.1 ± 0.2 %), and preserves the bit-exact zero-forgetting guarantee at every model size, resolution, and seed.
+**One-line claim:** Zero-forgetting continual learning (bit-exact, checksum-verified) on the CascadedViT family matches and exceeds the original CPG paper's accuracy (82.3 ± 0.4 % over 3 seeds vs 81.2 % with CViT-XL at 128px input, every seed above) at 5x fewer inference FLOPs, exceeds the VGG16-CPG reproduction at 32x fewer FLOPs (CViT-S @128, 80.1 ± 0.2 %), and preserves the bit-exact zero-forgetting guarantee at every model size, resolution, and seed. The advantage survives the fairness control: with identical ImageNet pretraining given to VGG16-CPG (81.66 %), CViT-XL@128 still wins on every seed at 5x fewer FLOPs.
 
 ---
 
@@ -381,7 +384,7 @@ Findings:
 1. **Seed coverage is uneven.** The two headline points now carry three seeds each (S@128: 80.06 ± 0.18 %; XL@128: 82.29 ± 0.40 %; every seed above its reference and drift 0.00e+00 in all six runs), but the 32px family sweep and the width sweep remain single-seed; the width-sweep 1.5-vs-2.0 inversion (72.27 vs 72.02) and the M-vs-L tie are within plausible seed noise.
 2. **VGG reference gap.** Our VGG16-CPG reference (78.61 %) is 2.6 pts below the paper's 81.2 %, mainly from skipping per-task hyperparameter search; using the paper's number would scale the cAPF ratios down by ~3 % without changing any conclusion.
 3. **Task-aware evaluation.** Like the original CPG, the setting is task-incremental (task id known at test time). Class-incremental inference would need a task-selection mechanism on top.
-4. **Pretraining asymmetry.** The family results use ImageNet-pretrained CViT backbones while the VGG reference is trained from scratch (per the original protocol). The from-scratch CViT numbers (70.5–70.8 %) are reported alongside so both comparisons are available.
+4. **Pretraining asymmetry — resolved.** The family results use ImageNet-pretrained CViT backbones while the original VGG reference trains from scratch (per the original protocol). This is now controlled directly: an ImageNet-pretrained VGG16-CPG run (identical official pipeline) reaches 81.66 %, and CViT-XL@128 exceeds it on every seed at 5x fewer FLOPs (section 9.6, finding 6). The from-scratch CViT numbers (70.5–70.8 %) remain reported so the scratch-vs-scratch comparison is also available.
 5. **FLOP counting** covers the backbone plus one head; piggymask binarization is a negligible elementwise op at inference and per-task BN swap is free (parameter copy, not compute).
 6. **Energy measurement** uses nvidia-smi board-power sampling at ~5 Hz over a sustained loop; it is coarse but the 2x power separation (83 vs 161 W) far exceeds its noise.
 7. **Growing remains open**: group-aware channel interleaving would restore CPG's third stage on chunk-routed ViTs; the width-sweep evidence (capacity not binding) suggests low accuracy upside on this benchmark, but the mechanism question is open for longer task streams.

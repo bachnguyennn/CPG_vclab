@@ -103,6 +103,8 @@ parser.add_argument('--finetune_again', action='store_true', default=False, help
 parser.add_argument('--max_allowed_network_width_multiplier', type=float, help='')
 parser.add_argument('--log_path', type=str, help='')
 parser.add_argument('--total_num_tasks', type=int, help='')
+parser.add_argument('--imagenet_pretrained', action='store_true', default=False,
+                    help='init backbone from torchvision vgg16_bn ImageNet weights (fresh task-1 finetune only)')
 
 
 def main():
@@ -189,6 +191,22 @@ def main():
     else:
         print('Error!')
         sys.exit(1)
+
+    if args.imagenet_pretrained and args.mode == 'finetune' and not args.load_folder and not resume_from_epoch:
+        # cfg-D conv/BN indices of make_layers_cifar100 align 1:1 with torchvision
+        # vgg16_bn 'features.*' keys, so a shape-matched copy transfers the whole
+        # conv stack + BN stats (classifier tail differs and stays random-init)
+        import torch.utils.model_zoo as model_zoo
+        zoo_state = model_zoo.load_url('https://download.pytorch.org/models/vgg16_bn-6c64b313.pth')
+        own_state = model.state_dict()
+        n_copied, n_params = 0, 0
+        for k, v in zoo_state.items():
+            if k in own_state and own_state[k].shape == v.shape:
+                own_state[k].copy_(v)
+                n_copied += 1
+                n_params += v.numel()
+        logging.info('imagenet init: copied %d tensors (%.2fM params) from torchvision vgg16_bn',
+                     n_copied, n_params / 1e6)
 
     # Add and set the model dataset.
     model.add_dataset(args.dataset, args.num_classes)

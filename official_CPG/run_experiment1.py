@@ -33,7 +33,8 @@ DATASETS = [
     'small_mammals', 'trees', 'vehicles_1', 'vehicles_2',
 ]
 
-SETTING = 'scratch_mul_1.5'
+SETTING = 'scratch_mul_1.5'  # switched to 'imagenet_mul_1.5' by --imagenet-init
+IMAGENET_INIT = False
 ARCH = 'custom_vgg_cifar100'
 BASELINE_ARCH = 'vgg16_bn_cifar100'
 BASELINE_ACC = 'logs/baseline_cifar100_acc.txt'
@@ -106,6 +107,8 @@ def cpg_finetune(task_id, width):
     ]
     if task_id != 1:
         cmd += ['--load_folder', ckpt(DATASETS[task_id - 1], 'gradual_prune')]
+    elif IMAGENET_INIT:
+        cmd += ['--imagenet_pretrained']
     return run(cmd)
 
 
@@ -255,7 +258,7 @@ def phase_inference(args):
 
     # write results table comparing to the paper
     lines = []
-    lines.append('CPG CIFAR-100 20-task reproduction (VGG16, scratch_mul_1.5)')
+    lines.append('CPG CIFAR-100 20-task reproduction (VGG16, {})'.format(SETTING))
     lines.append('=' * 78)
     lines.append('{:3s} {:33s} {:>8s} {:>8s} {:>7s}'.format(
         '#', 'task', 'ours', 'paper', 'diff'))
@@ -274,9 +277,10 @@ def phase_inference(args):
         '', 'AVERAGE', om, pm, om - pm))
     table = '\n'.join(lines)
     print('\n' + table)
-    with open('logs/cpg_results.txt', 'w') as f:
+    results_file = 'logs/cpg_results_imagenet.txt' if IMAGENET_INIT else 'logs/cpg_results.txt'
+    with open(results_file, 'w') as f:
         f.write(table + '\n')
-    print('\nWrote logs/cpg_results.txt')
+    print('\nWrote ' + results_file)
 
 
 def main():
@@ -287,13 +291,18 @@ def main():
     ap.add_argument('--finetune-epochs', type=int, default=100)
     ap.add_argument('--prune-epochs', type=int, default=20)
     ap.add_argument('--retrain-epochs', type=int, default=30)
+    ap.add_argument('--imagenet-init', action='store_true', default=False,
+                    help='init task 1 from torchvision vgg16_bn ImageNet weights; uses separate checkpoint/results namespace')
     args = ap.parse_args()
 
     # expose epoch counts as module globals used by the cpg_* helpers
-    global FT_EPOCHS, PRUNE_EPOCHS, RETRAIN_EPOCHS
+    global FT_EPOCHS, PRUNE_EPOCHS, RETRAIN_EPOCHS, SETTING, IMAGENET_INIT
     FT_EPOCHS = args.finetune_epochs
     PRUNE_EPOCHS = args.prune_epochs
     RETRAIN_EPOCHS = args.retrain_epochs
+    if args.imagenet_init:
+        IMAGENET_INIT = True
+        SETTING = 'imagenet_mul_1.5'
 
     if args.phase == 'baseline':
         phase_baseline(args)
