@@ -1,0 +1,25 @@
+Per-task LoRA rank 8 on frozen pretrained CViT-XL@128 : 20 tasks, 29 epochs
+avg retained acc 84.53%  BWT +0.000%  frozen-weight-drift 0.00e+00  logit-drift 0.00e+00
+cAPF 576.3 %/GFLOP (0.1467 GFLOPs merged)  adapter 0.769M params/task
+
+per-task retained accuracy (after all tasks):
+  aquatic_mammals                     71.6
+  fish                                85.2
+  flowers                             80.4
+  food_containers                     82.8
+  fruit_and_vegetables                89.8
+  household_electrical_devices        91.6
+  household_furniture                 83.8
+  insects                             91.6
+  large_carnivores                    87.0
+  large_man-made_outdoor_things       93.2
+  large_natural_outdoor_scenes        89.8
+  large_omnivores_and_herbivores      86.4
+  medium_mammals                      90.2
+  non-insect_invertebrates            90.0
+  people                              56.4
+  reptiles                            84.0
+  small_mammals                       77.2
+  trees                               75.0
+  vehicles_1                          89.8
+  vehicles_2                          94.8

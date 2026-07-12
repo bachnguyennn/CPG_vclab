@@ -14,6 +14,8 @@ CVIT_32 = [('S', 0.0198, 72.17), ('M', 0.0495, 72.77), ('L', 0.0714, 72.84), ('X
 # @128 points: mean over 3 seeds, with std as error bars
 # S@128: 80.27 / 79.94 / 79.98   XL@128: 82.71 / 81.91 / 82.25
 CVIT_128 = [('S@128', 0.0230, 80.06, 0.18), ('XL@128', 0.1467, 82.29, 0.40)]
+# per-task LoRA baseline on the frozen pretrained backbone (S: 3 seeds; XL: 1 seed)
+LORA_128 = [('LoRA S@128', 0.0230, 82.20, 0.26), ('LoRA XL@128', 0.1467, 84.53, 0.0)]
 VGG_REPRO = ('VGG16-CPG (repro, scratch)', 0.7467, 78.61)
 VGG_PAPER = ('CPG paper (VGG16)', 0.7467, 81.2)
 VGG_PRETR = ('VGG16-CPG (ImageNet-pretrained)', 0.7467, 81.66)
@@ -33,6 +35,15 @@ ax.errorbar(xs, ys, yerr=errs, fmt='s-', color='#D65F5F', lw=1.8, ms=8,
 for n, x, y, e in CVIT_128:
     ax.annotate(n, (x, y), textcoords='offset points', xytext=(0, 11), ha='center', fontsize=9,
                 color='#D65F5F', fontweight='bold')
+
+xs, ys = [p[1] for p in LORA_128], [p[2] for p in LORA_128]
+errs = [p[3] for p in LORA_128]
+ax.errorbar(xs, ys, yerr=errs, fmt='^--', color='#59A14F', lw=1.5, ms=8,
+            capsize=4, ecolor='#59A14F', elinewidth=1.2,
+            label='Per-task LoRA r=8 @128 (frozen backbone baseline)')
+for n, x, y, e in LORA_128:
+    ax.annotate(n.replace(' S@128', ' S').replace(' XL@128', ' XL'), (x, y),
+                textcoords='offset points', xytext=(0, 9), ha='center', fontsize=9, color='#59A14F')
 
 ax.plot(VGG_REPRO[1], VGG_REPRO[2], 'D', color='#555555', ms=9, label=VGG_REPRO[0])
 ax.annotate('VGG16-CPG\n(our repro, 78.6)', (VGG_REPRO[1], VGG_REPRO[2]),
@@ -59,7 +70,7 @@ ax.set_xlabel('Inference compute (GFLOPs, log scale)')
 ax.set_ylabel('Avg retained accuracy after 20 tasks (%)')
 ax.set_title('Zero-forgetting continual learning: accuracy vs compute\n'
              '(20-task CIFAR-100, all points bit-exact zero forgetting)', fontsize=10.5)
-ax.set_ylim(69, 85)
+ax.set_ylim(69, 86.5)
 ax.grid(True, which='both', alpha=0.25)
 ax.legend(loc='lower right', fontsize=8.5, framealpha=0.9)
 fig.tight_layout()
