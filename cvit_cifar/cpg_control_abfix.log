@@ -1,0 +1,30 @@
+
+=== [CONTROL (fine-tune)] TASK 1/4: aquatic_mammals ===
+after task 1: aquati=56.0
+
+=== [CONTROL (fine-tune)] TASK 2/4: fish ===
+after task 2: aquati=28.2  fish=71.4
+
+=== [CONTROL (fine-tune)] TASK 3/4: flowers ===
+after task 3: aquati=20.2  fish=28.8  flower=66.0
+
+=== [CONTROL (fine-tune)] TASK 4/4: food_containers ===
+after task 4: aquati=16.6  fish=20.0  flower=46.2  food_c=70.0
+
+==========================================================================
+CONTROL (fine-tune) : per-task accuracy (row = task, col = measured after task N)
+==========================================================================
+task \ after      1      2      3      4
+aquatic_mamm   56.0   28.2   20.2   16.6
+fish            -     71.4   28.8   20.0
+flowers         -      -     66.0   46.2
+food_contain    -      -      -     70.0
+--------------------------------------------------------------------------
+avg RETAINED accuracy (after all tasks)  : 38.20%
+max ACCURACY drift after a task learned  : 51.400%
+Backward Transfer (BWT, ~0 = no forget)  : -27.650%
+
+continual Accuracy-Per-FLOP (cAPF = retained_acc / inference GFLOPs):
+  CViT-CPG (ours) : 38.20% / 0.0198 GFLOPs = 1924.6 %/GFLOP  (1.71M params)
+  VGG16-CPG (ref) : 78.60% / 0.7467 GFLOPs = 105.3 %/GFLOP
+  -> CViT-CPG cAPF is 18.3x higher

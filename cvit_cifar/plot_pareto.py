@@ -11,9 +11,9 @@ import matplotlib.pyplot as plt
 
 # (name, GFLOPs, retained acc %)
 CVIT_32 = [('S', 0.0198, 72.17), ('M', 0.0495, 72.77), ('L', 0.0714, 72.84), ('XL', 0.1232, 74.34)]
-# @128 points: mean over 3 seeds, with std as error bars
-# S@128: 80.27 / 79.94 / 79.98   XL@128: 82.71 / 81.91 / 82.25
-CVIT_128 = [('S@128', 0.0230, 80.06, 0.18), ('XL@128', 0.1467, 82.29, 0.40)]
+# @128 points: mean over 3 seeds, with std as error bars (post-attention-bias-fix runs)
+# S@128: 80.31 / 79.81 / 80.09   XL@128: 82.61 / 82.00 / 82.23
+CVIT_128 = [('S@128', 0.0230, 80.07, 0.25), ('XL@128', 0.1467, 82.28, 0.31)]
 # per-task LoRA baseline on the frozen pretrained backbone (S: 3 seeds; XL: 1 seed)
 LORA_128 = [('LoRA S@128', 0.0230, 82.20, 0.26), ('LoRA XL@128', 0.1467, 84.53, 0.0)]
 VGG_REPRO = ('VGG16-CPG (repro, scratch)', 0.7467, 78.61)

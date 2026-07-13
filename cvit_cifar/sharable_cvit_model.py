@@ -51,17 +51,23 @@ class SharableCViT(nn.Module):
         self.dataset2num_classes = {}
         self.active = None
 
-        # per-task state store: BatchNorm state + SharableConv2d biases.
-        # BN captures task-specific statistics; conv biases are NOT covered by
-        # the weight ownership mask, so (like CPG for VGG) they are per-task too
-        # -- otherwise later tasks' bias updates would leak into old tasks
-        # (the SqueezeExcite convs are the only biased ones here).
+        # per-task state store: BatchNorm state + SharableConv2d biases +
+        # attention-bias tables. BN captures task-specific statistics; conv
+        # biases are NOT covered by the weight ownership mask, so (like CPG for
+        # VGG) they are per-task too -- otherwise later tasks' bias updates
+        # would leak into old tasks (the SqueezeExcite convs are the only
+        # biased ones here). The attention_biases tables are likewise trained
+        # by every task but outside the conv masks, so they get the same
+        # per-task treatment (a few KB/task).
         self._bn_names = [n for n, m in self.named_modules()
                           if isinstance(m, (nn.BatchNorm2d, nn.BatchNorm1d))]
         self._bias_names = [n for n, m in self.named_modules()
                             if isinstance(m, SharableConv2d) and m.bias is not None]
+        self._attn_names = [n for n, m in self.named_modules()
+                            if hasattr(m, 'attention_biases')]
         self.bn_store = {}
         self.bias_store = {}
+        self.attnb_store = {}
 
     # ---- task management ----
     def add_dataset(self, name, num_classes):
@@ -79,7 +85,10 @@ class SharableCViT(nn.Module):
         self.bn_store[name] = {bn: {k: v.detach().clone() for k, v in mods[bn].state_dict().items()}
                                for bn in self._bn_names}
         self.bias_store[name] = {b: mods[b].bias.detach().clone() for b in self._bias_names}
+        self.attnb_store[name] = {a: mods[a].attention_biases.detach().clone()
+                                  for a in self._attn_names}
 
+    @torch.no_grad()
     def load_bn(self, name):
         if name not in self.bn_store:
             return
@@ -88,6 +97,13 @@ class SharableCViT(nn.Module):
             mods[bn].load_state_dict(st)
         for b, val in self.bias_store.get(name, {}).items():
             mods[b].bias.data.copy_(val)
+        for a, val in self.attnb_store.get(name, {}).items():
+            m = mods[a]
+            m.attention_biases.data.copy_(val)
+            # CGA caches `ab = attention_biases[:, idxs]` when switched to
+            # eval; refresh it or the restore is invisible at eval time
+            if hasattr(m, 'ab'):
+                m.ab = m.attention_biases[:, m.attention_bias_idxs]
 
     def forward(self, x):
         x = self.patch_embed(x)

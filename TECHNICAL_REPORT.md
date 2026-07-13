@@ -16,7 +16,7 @@ Three research questions structure the work:
 - **RQ2 (efficiency):** How much continual-learning accuracy per unit of inference compute does the CViT backbone deliver relative to the original VGG16 backbone?
 - **RQ3 (scaling):** Along which axis (width, depth, initialization) does the efficient backbone close the accuracy gap to VGG16-CPG, and where does the Pareto frontier lie?
 
-Headline answers: (RQ1) yes — frozen-weight drift is bit-exact 0.00e+00 at every model size, verified by checksum; (RQ2) 5.7–34.5x higher continual Accuracy-Per-FLOP; (RQ3) depth, not width, and ImageNet-pretrained initialization; efficiency frontier at CViT-S, accuracy frontier at CViT-XL.
+Headline answers: (RQ1) yes, exactly — frozen-weight drift is bit-exact 0.00e+00 at every model size (checksum-verified), and after extending the per-task store to every unmasked trainable tensor (Section 5.4), BWT is +0.000 % and old-task logits are reproduced bit-for-bit in every run; (RQ2) 5.3–34.5x higher continual Accuracy-Per-FLOP; (RQ3) depth, not width, and ImageNet-pretrained initialization; efficiency frontier at CViT-S, accuracy frontier at CViT-XL.
 
 ---
 
@@ -35,7 +35,7 @@ Per task, the pipeline has three stages:
 2. **Compacting (gradual pruning).** The task's newly trained weights are magnitude-pruned over several epochs on a cubic sparsity schedule up to a target sparsity (60 % in all our runs), then briefly re-finetuned. Surviving weights get `mask = t` and freeze; pruned weights return to `mask = 0` and become the free pool for future tasks.
 3. **Growing.** If the free pool is exhausted, the original method widens every layer by a multiplier and adds the new columns/rows to the free pool. (On CViT this stage turned out to be architecturally unsound — Section 8.)
 
-Statistics that are inherently task-specific and cannot be masked at weight granularity are stored **per task** and swapped at inference: the classification head, all BatchNorm affine parameters and running statistics, and (our addition, Section 5.4) all convolution biases.
+Statistics that are inherently task-specific and cannot be masked at weight granularity are stored **per task** and swapped at inference: the classification head, all BatchNorm affine parameters and running statistics, and (our additions, Section 5.4) all convolution biases and the attention-bias tables.
 
 Because forgetting is prevented by exact weight freezing, the method's guarantee is *falsifiable at bit level*: if any frozen weight changes by even one ULP, the implementation is broken. We exploit this for verification (Section 6).
 
@@ -154,13 +154,17 @@ Unit test (`test_sharable_block.py`): a converted CascadedViT block is bit-ident
 
 - backbone = `build_cvit_cifar(variant, ...)` with all 138 convs converted to Sharable;
 - **per-task heads**: a `ModuleList` of `BN_Linear(embed_last, 5)` classifiers, one appended per task;
-- **per-task BatchNorm store**: `save_bn(task)` / `load_bn(task)` snapshot and restore every BN's weight, bias, running_mean, running_var (and, after the fix below, every conv bias). Evaluating task k always runs under task k's own statistics.
+- **per-task BatchNorm store**: `save_bn(task)` / `load_bn(task)` snapshot and restore every BN's weight, bias, running_mean, running_var (and, after the fixes below, every conv bias and the attention-bias tables). Evaluating task k always runs under task k's own statistics.
 
-### 5.4 The SqueezeExcite bias leak (correctness fix)
+### 5.4 Unmasked-tensor leaks: SqueezeExcite biases and attention-bias tables (correctness fixes)
 
-The 4 SE convolutions carry **bias** terms. Biases are not covered by the weight-ownership mask (the reference VGG has no conv biases, so the original code never needed this). During task t > 1 training, SE biases moved, changing old tasks' functions: symptom was a persistent max logit drift of ~0.1–0.8 on old tasks despite bit-exact weights — initially misattributed to cuDNN nondeterminism. Fix: conv biases joined the per-task store (saved/restored exactly like BN). After the fix, old-task accuracy is *exactly* flat across the run and residual logit drift dropped to pure float-kernel noise (~1e-1 max under nondeterministic kernels, exactly 0 change in accuracy under deterministic eval).
+Two classes of trainable tensors sit outside the weight-ownership masks and had to join the per-task store:
 
-This is a general lesson for porting mask-based CL methods to modern backbones: **the guarantee must cover every trainable tensor, not just the ones the original architecture happened to have.** Any unmasked trainable scalar (bias, LayerScale, learned temperature, attention bias) is a forgetting channel.
+**SqueezeExcite biases.** The 4 SE convolutions carry **bias** terms. Biases are not covered by the weight-ownership mask (the reference VGG has no conv biases, so the original code never needed this). During task t > 1 training, SE biases moved, changing old tasks' functions: symptom was a persistent max logit drift of ~0.1–0.8 on old tasks despite bit-exact weights — initially misattributed to cuDNN nondeterminism. Fix: conv biases joined the per-task store (saved/restored exactly like BN).
+
+**Attention-bias tables.** CViT's cascaded group attention adds learned relative-position biases (`attention_biases`, a few KB per attention module) to every attention map. These parameters are trained by every task but are neither conv weights (so the ownership masks never see them) nor part of the BN/bias store — so old tasks were evaluated under the *latest* task's tables. This was the source of the last residual ±0.1 % BWT and ~1e-1 logit drift remaining after the SE fix. Fix: the tables joined the per-task store. One implementation subtlety: the attention module caches `ab = attention_biases[:, idxs]` when switched to eval mode, so the per-task restore must also refresh that cache — otherwise the restore is silently invisible at evaluation. After this fix, every forgetting instrument reads exactly zero (Section 6): BWT +0.000 %, logit drift 0.00e+00, at every scale and seed measured.
+
+This is a general lesson for porting mask-based CL methods to modern backbones: **the guarantee must cover every trainable tensor, not just the ones the original architecture happened to have.** Any unmasked trainable scalar (bias, LayerScale, learned temperature, attention bias) is a forgetting channel — and each one found here converted a "≈0" into an exact 0.
 
 ### 5.5 Per-task training loop (B3)
 
@@ -169,7 +173,7 @@ This is a general lesson for porting mask-based CL methods to modern backbones: 
 1. Add head t; snapshot-load free/owned state; for t > 1 initialize piggymasks over owned weights.
 2. **Finetune** 25 epochs, AdamW, lr 1e-3 (weights) / 5e-4 (piggymasks), constant LR, batch 64, gradient freezing every step.
 3. **Gradual prune** to 60 % sparsity over 4 epochs (cubic schedule) with brief re-finetuning between prune steps.
-4. Stamp masks (`make_finetuning_mask`), save per-task BN + biases + head.
+4. Stamp masks (`make_finetuning_mask`), save per-task BN + conv biases + attention-bias tables + head.
 5. Evaluate **all** tasks seen so far (each under its own head/BN/mask state — weights are snapshotted and restored around masked evaluation), and record the verification instruments (Section 6).
 
 The recipe (25 finetune / 4 prune epochs, constant LR, light augmentation) was validated as the reproducible operating point: both a 50-epoch cosine schedule and RandomErasing(0.25) *reduced* accuracy (Section 9.2) and were reverted.
@@ -181,8 +185,8 @@ The recipe (25 finetune / 4 prune epochs, constant LR, light augmentation) was v
 A claim of "zero forgetting" is only as strong as its measurement. Accuracy alone is insufficient (accuracy can be flat while the function drifts, or wiggle from eval nondeterminism while weights are exact). We use a four-instrument hierarchy, ordered by strength:
 
 1. **Frozen-weight checksum (`_frozen_checksum`) — the guarantee itself.** After every task, for every sharable layer, the masked (owned-by-earlier-tasks) weight entries are compared bit-for-bit against their values at freeze time; the report metric is the max absolute drift. Any nonzero value falsifies the implementation. **Result: 0.00e+00 in every run of every variant, width, and initialization.**
-2. **Logit identity.** Reference logits for each finished task's test set are stored at freeze time and compared after every subsequent task. With deterministic kernels the drift is 0; with cuDNN benchmark kernels a residual ~1e-1 max reflects kernel selection nondeterminism, not weight change (proven by instrument 1).
-3. **Accuracy matrix and Backward Transfer.** The full lower-triangular accuracy matrix A[i,j] (task i evaluated after task j) under deterministic evaluation (`cudnn.deterministic=True, benchmark=False`); BWT = mean over tasks of (final accuracy - accuracy just after learning). CPG runs give |BWT| <= 0.27 % (residual is evaluation-order effects), and after the bias fix the matrix rows are exactly constant.
+2. **Logit identity.** Reference logits for each finished task's test set are stored at freeze time and compared after every subsequent task. **Result: 0.00e+00 in every run after the Section 5.4 fixes** — each old task's test-set logits are reproduced exactly, so the *function*, not just the weights, is preserved. (Before the attention-bias fix a residual ~1e-1 remained; instrument 1 proved it was not weight movement, and Section 5.4 identifies its actual source.)
+3. **Accuracy matrix and Backward Transfer.** The full lower-triangular accuracy matrix A[i,j] (task i evaluated after task j) under deterministic evaluation (`cudnn.deterministic=True, benchmark=False`); BWT = mean over tasks of (final accuracy - accuracy just after learning). After the Section 5.4 fixes, BWT is exactly +0.000 % and every matrix row is exactly constant in every run.
 4. **Fine-tuning control (`--control`).** Identical model, data, task order, and epochs, with masks and freezing disabled. This isolates the mechanism as the only changed variable.
 
 The 4-task controlled contrast (CViT-S, 15 finetune / 4 prune epochs):
@@ -191,23 +195,23 @@ The 4-task controlled contrast (CViT-S, 15 finetune / 4 prune epochs):
 
 | Task | after T1 | after T2 | after T3 | after T4 |
 |------|:---:|:---:|:---:|:---:|
-| aquatic_mammals | 56.4 | 56.4 | 56.2 | 56.4 |
-| fish | — | 72.4 | 71.8 | 71.8 |
+| aquatic_mammals | 56.4 | 56.4 | 56.4 | 56.4 |
+| fish | — | 72.4 | 72.4 | 72.4 |
 | flowers | — | — | 69.6 | 69.6 |
 | food_containers | — | — | — | 73.8 |
 
-BWT = **-0.15 %**; frozen-weight drift = **0.00e+00**.
+BWT = **+0.000 %**; frozen-weight drift = **0.00e+00**; logit drift = **0.00e+00**.
 
 **Fine-tuning control (same network, no masks):**
 
 | Task | after T1 | after T2 | after T3 | after T4 |
 |------|:---:|:---:|:---:|:---:|
-| aquatic_mammals | 56.0 | 28.2 | 20.2 | 16.2 |
-| fish | — | 71.4 | 28.8 | 20.2 |
-| flowers | — | — | 66.0 | 46.0 |
+| aquatic_mammals | 56.0 | 28.2 | 20.2 | 16.6 |
+| fish | — | 71.4 | 28.8 | 20.0 |
+| flowers | — | — | 66.0 | 46.2 |
 | food_containers | — | — | — | 70.0 |
 
-BWT = **-27.75 %** (task 1 collapses 56 -> 16).
+BWT = **-27.65 %** (task 1 collapses 56 -> 17).
 
 Reading: same backbone, same data, same schedule; the only difference is the ownership masks. The control forgets catastrophically; CPG forgets nothing, and the preservation is provably from frozen weights (bit-identity), not from failing to learn new tasks (new-task accuracies 70–74 % in both arms). This answers **RQ1 affirmatively**: the CPG mechanism transfers intact to a conv-heavy hybrid ViT including depthwise convolutions, SE modules, and the convolutions inside cascaded group attention.
 
@@ -344,20 +348,20 @@ Identical recipe to all family runs:
 
 | Backbone | GFLOPs | Retained acc | BWT | Frozen-wt drift | cAPF | vs VGG |
 |----------|:------:|:---:|:---:|:---:|:---:|:---:|
-| CViT-S @128 | 0.0230 | 80.06 ± 0.18 % (3 seeds) | -0.04 / +0.13 / -0.11 % | 0.00e+00 (all) | 3482–3495 | 33.1x |
-| CViT-XL @128 | 0.1467 | 82.29 ± 0.40 % (3 seeds) | +0.10 / -0.09 / +0.02 % | 0.00e+00 (all) | 559–564 | 5.3x |
+| CViT-S @128 | 0.0230 | 80.07 ± 0.25 % (3 seeds) | +0.000 % (all) | 0.00e+00 (all) | 3475–3496 | 33.1x |
+| CViT-XL @128 | 0.1467 | 82.28 ± 0.31 % (3 seeds) | +0.000 % (all) | 0.00e+00 (all) | 559–563 | 5.3x |
 | VGG16-CPG (repro, scratch) | 0.7467 | 78.61 % | ~0 | — | 105 | 1x |
 | VGG16-CPG (ImageNet-pretrained) | 0.7467 | 81.66 % | ~0 | — | 109 | 1.04x |
 | CPG paper (VGG16, scratch) | 0.7467 | 81.2 % | ~0 | — | 109 | — |
 
 Findings:
 
-1. **CViT-S @128 exceeds our VGG16-CPG reproduction** (80.06 ± 0.18 vs 78.61 %, every seed above) at 32x fewer FLOPs; **CViT-XL @128 exceeds the original paper's published average** (82.29 ± 0.40 vs 81.2 %, every seed above) at 5x fewer FLOPs. Accuracy parity is achieved with the efficiency claim intact.
-2. **Both headline points are seed-stable.** Three independent seeds each: S@128 = 80.27 / 79.94 / 79.98 % (mean 80.06, std 0.18); XL@128 = 82.71 / 81.91 / 82.25 % (mean 82.29, std 0.40). The margin over the respective reference exceeds 3 standard deviations in both cases, and frozen-weight drift is 0.00e+00 in all six runs.
+1. **CViT-S @128 exceeds our VGG16-CPG reproduction** (80.07 ± 0.25 vs 78.61 %, every seed above) at 32x fewer FLOPs; **CViT-XL @128 exceeds the original paper's published average** (82.28 ± 0.31 vs 81.2 %, every seed above) at 5x fewer FLOPs. Accuracy parity is achieved with the efficiency claim intact.
+2. **Both headline points are seed-stable.** Three independent seeds each: S@128 = 80.31 / 79.81 / 80.09 % (mean 80.07, std 0.25); XL@128 = 82.61 / 82.00 / 82.23 % (mean 82.28, std 0.31). The margin over the respective reference exceeds 3 standard deviations in both cases, and every run measures exactly zero forgetting (BWT +0.000 %, frozen-weight drift 0.00e+00, logit drift 0.00e+00). All six runs postdate the attention-bias fix (Section 5.4); the pre-fix runs gave statistically identical accuracy (S 80.06 ± 0.18, XL 82.29 ± 0.40) with residual |BWT| <= 0.13 %.
 3. **Attribution is clean**: partial transfer at 32px was worth +1.4 pts; full transfer at 128px is worth +7.9 (S) and +8.0 (XL) in seed-mean terms at the same internal geometry — the jump appears exactly when the stem transfers, identifying transfer completeness (not resolution) as the mechanism.
-4. **Zero forgetting is resolution-independent**: frozen-weight drift 0.00e+00 and |BWT| <= 0.13 % at 128px for both variants across all seeds.
-5. Per-task, every superclass improves; the historically hardest tasks improve most in relative terms (aquatic_mammals 57.2 -> 69.6 for XL, people 44.0 -> 53.6, above VGG's 50.6).
-6. **The comparison survives symmetric pretraining (fairness control).** Giving VGG16-CPG the same advantage — ImageNet vgg16_bn init (65 tensors / 14.73M params: the complete conv stack + BN statistics, transferred via the official pipeline with the identical growth/pruning protocol; final width 1.5, same 0.7467 GFLOPs) — lifts it from 78.61 to **81.66 %** (+3.05, and +0.42 over the paper's scratch number). CViT-XL@128 (82.29 ± 0.40) still exceeds this pretrained baseline on every seed at 5x fewer FLOPs, and CViT-S@128 (80.06 ± 0.18) trails it by only 1.6 pts at 32x fewer FLOPs. Pretraining is worth +3.05 on VGG but +7.9 on CViT — the efficient ViT converts pretrained knowledge into continual-learning accuracy more effectively than the CNN under the same CPG mechanism. Result file: `official_CPG/logs/cpg_results_imagenet.txt`.
+4. **Zero forgetting is resolution-independent and exact**: BWT +0.000 %, frozen-weight drift 0.00e+00, and logit drift 0.00e+00 at 128px for both variants across all seeds.
+5. Per-task, every superclass improves; the historically hardest tasks improve most in relative terms (aquatic_mammals 57.2 -> 67.4 for XL, people 44.0 -> 53.6, above VGG's 50.6).
+6. **The comparison survives symmetric pretraining (fairness control).** Giving VGG16-CPG the same advantage — ImageNet vgg16_bn init (65 tensors / 14.73M params: the complete conv stack + BN statistics, transferred via the official pipeline with the identical growth/pruning protocol; final width 1.5, same 0.7467 GFLOPs) — lifts it from 78.61 to **81.66 %** (+3.05, and +0.42 over the paper's scratch number). CViT-XL@128 (82.28 ± 0.31) still exceeds this pretrained baseline on every seed at 5x fewer FLOPs, and CViT-S@128 (80.07 ± 0.25) trails it by only 1.6 pts at 32x fewer FLOPs. Pretraining is worth +3.05 on VGG but +7.9 on CViT — the efficient ViT converts pretrained knowledge into continual-learning accuracy more effectively than the CNN under the same CPG mechanism. Result file: `official_CPG/logs/cpg_results_imagenet.txt`.
 7. **Hardware cost of the resolution move is negligible** (measured, RTX 3060, batch 128): the stride-16 stem absorbs the larger input, so S@128 matches the 32px latency (0.211 ms/img) and still undercuts VGG's energy (19.7 vs 26.0 mJ/img) while exceeding its accuracy; XL@128 is 0.254 ms/img / 32.2 mJ/img (~1.2x VGG energy) for +4.1 accuracy points over the reproduction.
 
 ### 9.7 Per-task LoRA baseline: masks vs low-rank deltas on the same backbone
@@ -366,10 +370,10 @@ The on-protocol PEFT baseline the 2024-25 literature (InfLoRA, SD-LoRA, CL-LoRA)
 
 | Method (all @128, pretrained) | Adapter params/task | Storage/task (fp32) | Retained acc | BWT | Logit drift |
 |------------------------------|:---:|:---:|:---:|:---:|:---:|
-| CPG masks, CViT-S | 1-bit mask + BN/bias/head | ~0.4 MB | 80.06 ± 0.18 % (3 seeds) | ±0.13 % | ~1e-1 |
+| CPG masks, CViT-S | 1-bit mask + BN/bias/attn-bias/head | ~0.4 MB | 80.07 ± 0.25 % (3 seeds) | +0.000 % | 0.00e+00 |
 | LoRA r=2, CViT-S | 0.120 M | 0.48 MB | 81.00 % (1 seed) | +0.000 % | 0.00e+00 |
 | LoRA r=8, CViT-S | 0.293 M | 1.17 MB | **82.20 ± 0.26 %** (82.47/81.96/82.18) | +0.000 % | 0.00e+00 |
-| CPG masks, CViT-XL | 1-bit mask + BN/bias/head | ~1.4 MB | 82.29 ± 0.40 % (3 seeds) | ±0.10 % | ~1e-1 |
+| CPG masks, CViT-XL | 1-bit mask + BN/bias/attn-bias/head | ~1.4 MB | 82.28 ± 0.31 % (3 seeds) | +0.000 % | 0.00e+00 |
 | LoRA r=8, CViT-XL | 0.769 M | 3.08 MB | **84.53 % (1 seed)** | +0.000 % | 0.00e+00 |
 
 Findings (reported with full candor — the baseline wins on accuracy):
@@ -377,7 +381,7 @@ Findings (reported with full candor — the baseline wins on accuracy):
 1. **Per-task LoRA beats CPG masks at every matched budget on this benchmark.** At storage parity (r=2, 0.48 vs ~0.4 MB/task) LoRA leads CPG-S by +0.9; at r=8 it leads by +2.1 (> 5 sigma of CPG's seed spread, seed-stable on both sides) and matches CPG-XL at 6.4x fewer FLOPs. LoRA-XL reaches **84.53 %** — the best number in the entire study, +2.2 over CPG-XL and +2.9 over the ImageNet-pretrained VGG16-CPG control.
 2. **The mechanism explains the gap.** Each LoRA task adapts the *pristine* full pretrained backbone: no pruning tax (CPG compacts each task to 60 % sparsity), no constraint to build on earlier tasks' frozen weights, and order-invariance by construction. CPG pays accuracy for keeping one compact, self-contained backbone.
 3. **The trade-off is storage scaling, and it is honest in both directions.** LoRA state grows strictly linearly with no reuse or compaction — at 20 tasks the r=8 adapters (5.9 M params) already outweigh the S backbone (1.7 M) 3.4x, and rank is a coarse dial (r2 -> r8: +1.2 acc for 2.4x storage). CPG keeps a single backbone whose masks add 1 bit/weight/task and whose weights are *shared* across tasks — the regime where masks win is many tasks under a hard storage budget, not accuracy at 20 tasks.
-4. **The LoRA runs are the only ones with *exactly* zero measured forgetting** (BWT +0.000, logit drift 0.00e+00 in all 5 runs), because they store the attention-bias tables per task. This isolates the source of the CPG runs' residual ±0.1 % BWT: CViT's `attention_biases` parameters are trained by every task but are outside the conv-weight ownership masks (see threat #6) — a correctness insight about porting weight-masking CL to attention architectures.
+4. **Both mechanisms now measure *exactly* zero forgetting** (BWT +0.000, logit drift 0.00e+00 in every run of both arms). Historically, the LoRA baseline measured exact zero first — because it stored the attention-bias tables per task from the start — which isolated the source of the CPG runs' then-residual ±0.1 % BWT and led directly to the attention-bias fix (Section 5.4). The CPG headline runs in this table postdate that fix. A correctness insight about porting weight-masking CL to attention architectures, discovered by running a baseline with stricter bookkeeping.
 
 ### 9.8 Consolidated result narrative
 
@@ -390,27 +394,27 @@ Findings (reported with full candor — the baseline wins on accuracy):
 | Pretrained S | ImageNet init | 72.17 % | 3636 | Only lever that helped (+1.4) |
 | Family | S / M / L / XL pretrained | 72.2 / 72.8 / 72.8 / 74.3 % | 3636 / 1469 / 1020 / 604 | Depth beats width; Pareto frontier |
 | Growing | width 1.0 -> 1.5 transfer | logit drift 0.978 | — | Negative result: chunk routing breaks naive growth |
-| Resolution S | S @128, full ckpt transfer | 80.06 ± 0.18 % (3 seeds) | ~3490 | Beats VGG repro at 32x fewer FLOPs, every seed |
-| Resolution XL | XL @128, full ckpt transfer | 82.29 ± 0.40 % (3 seeds) | ~561 | Beats the original CPG paper at 5x fewer FLOPs, every seed |
+| Resolution S | S @128, full ckpt transfer | 80.07 ± 0.25 % (3 seeds) | ~3486 | Beats VGG repro at 32x fewer FLOPs, every seed |
+| Resolution XL | XL @128, full ckpt transfer | 82.28 ± 0.31 % (3 seeds) | ~561 | Beats the original CPG paper at 5x fewer FLOPs, every seed |
 | Fairness control | VGG16-CPG, ImageNet init | 81.66 % | 109 | XL@128 still wins with symmetric pretraining |
 | LoRA baseline S | per-task r=8 on frozen S@128 | 82.20 ± 0.26 % (3 seeds) | 3579 | Beats CPG masks at every matched budget |
 | LoRA baseline XL | per-task r=8 on frozen XL@128 | 84.53 % | 576 | Best accuracy in the study; linear storage growth |
 
-**One-line claim:** Zero-forgetting continual learning (bit-exact, checksum-verified) on the CascadedViT family matches and exceeds the original CPG paper's accuracy (82.3 ± 0.4 % over 3 seeds vs 81.2 % with CViT-XL at 128px input, every seed above) at 5x fewer inference FLOPs, exceeds the VGG16-CPG reproduction at 32x fewer FLOPs (CViT-S @128, 80.1 ± 0.2 %), and preserves the bit-exact zero-forgetting guarantee at every model size, resolution, and seed. The advantage survives the fairness control: with identical ImageNet pretraining given to VGG16-CPG (81.66 %), CViT-XL@128 still wins on every seed at 5x fewer FLOPs. Within the same protocol, however, the mechanism comparison is won by per-task low-rank adaptation: LoRA on the frozen backbone exceeds CPG masks at matched storage (82.20 ± 0.26 vs 80.06 ± 0.18 on S; 84.53 vs 82.29 on XL) at the cost of strictly linear per-task storage growth with no weight sharing — the accuracy/storage-scaling trade-off between the two exact-forgetting mechanisms is a central finding of this study.
+**One-line claim:** Exact zero-forgetting continual learning — BWT +0.000 %, frozen-weight drift 0.00e+00, and old-task logits reproduced bit-for-bit (logit drift 0.00e+00) in every run — on the CascadedViT family matches and exceeds the original CPG paper's accuracy (82.3 ± 0.3 % over 3 seeds vs 81.2 % with CViT-XL at 128px input, every seed above) at 5x fewer inference FLOPs, and exceeds the VGG16-CPG reproduction at 32x fewer FLOPs (CViT-S @128, 80.1 ± 0.3 %). The advantage survives the fairness control: with identical ImageNet pretraining given to VGG16-CPG (81.66 %), CViT-XL@128 still wins on every seed at 5x fewer FLOPs. Within the same protocol, however, the mechanism comparison is won by per-task low-rank adaptation: LoRA on the frozen backbone exceeds CPG masks at matched storage (82.20 ± 0.26 vs 80.07 ± 0.25 on S; 84.53 vs 82.28 on XL) at the cost of strictly linear per-task storage growth with no weight sharing — the accuracy/storage-scaling trade-off between the two exact-forgetting mechanisms is a central finding of this study.
 
 ---
 
 ## 10. Threats to validity and limitations
 
-1. **Seed coverage is uneven.** The two headline points now carry three seeds each (S@128: 80.06 ± 0.18 %; XL@128: 82.29 ± 0.40 %; every seed above its reference and drift 0.00e+00 in all six runs), but the 32px family sweep and the width sweep remain single-seed; the width-sweep 1.5-vs-2.0 inversion (72.27 vs 72.02) and the M-vs-L tie are within plausible seed noise.
+1. **Seed coverage is uneven.** The two headline points carry three seeds each (S@128: 80.07 ± 0.25 %; XL@128: 82.28 ± 0.31 %; every seed above its reference and exactly zero forgetting in all six runs), but the 32px family sweep and the width sweep remain single-seed; the width-sweep 1.5-vs-2.0 inversion (72.27 vs 72.02) and the M-vs-L tie are within plausible seed noise.
 2. **VGG reference gap.** Our VGG16-CPG reference (78.61 %) is 2.6 pts below the paper's 81.2 %, mainly from skipping per-task hyperparameter search; using the paper's number would scale the cAPF ratios down by ~3 % without changing any conclusion.
 3. **Task-aware evaluation.** Like the original CPG, the setting is task-incremental (task id known at test time). Class-incremental inference would need a task-selection mechanism on top.
 4. **Pretraining asymmetry — resolved.** The family results use ImageNet-pretrained CViT backbones while the original VGG reference trains from scratch (per the original protocol). This is now controlled directly: an ImageNet-pretrained VGG16-CPG run (identical official pipeline) reaches 81.66 %, and CViT-XL@128 exceeds it on every seed at 5x fewer FLOPs (section 9.6, finding 6). The from-scratch CViT numbers (70.5–70.8 %) remain reported so the scratch-vs-scratch comparison is also available.
-5. **CPG's "bit-exact" guarantee covers conv weights, not the attention-bias tables.** CViT's `attention_biases` parameters are trained by every task and are outside the conv ownership masks and the per-task BN/bias store, so old tasks are evaluated under the latest task's (slightly moved) tables. This is the identified source of the residual |BWT| <= 0.13 % and ~1e-1 logit drift in the CPG runs (frozen conv-weight drift is genuinely 0.00e+00). The LoRA baseline stores these tables per task and measures exactly 0. The fix for CPG is identical (add `attention_biases` to the per-task state store, a few KB/task); the headline CPG runs predate it, and the drift magnitude bounds the effect at ~0.1 %.
+5. **Attention-bias tables were initially outside the guarantee — resolved.** CViT's `attention_biases` parameters are trained by every task and were originally outside both the conv ownership masks and the per-task BN/bias store, so old tasks were evaluated under the latest task's (slightly moved) tables — the identified source of a residual |BWT| <= 0.13 % and ~1e-1 logit drift (frozen conv-weight drift was genuinely 0.00e+00 throughout). The tables now live in the per-task state store (Section 5.4, a few KB/task), and all headline CPG runs postdate the fix: every instrument measures exactly zero (BWT +0.000 %, logit drift 0.00e+00) with accuracy statistically unchanged (S@128 80.06 ± 0.18 -> 80.07 ± 0.25; XL@128 82.29 ± 0.40 -> 82.28 ± 0.31). The 32px family/width-sweep runs predate the fix; their residual is bounded at ~0.1 %.
 6. **Resolution asymmetry (32 vs 128) is not a transfer asymmetry.** CViT@128 and VGG@32 differ in input resolution, but the 128px input is a checkpoint-transfer fix, not a compute upgrade: it restores the stock stride-16 stem so the internal geometry is unchanged (still 8x8 maps) and FLOPs rise only 0.0198 -> 0.0230. VGG needs no such fix — its conv stack is fully convolutional, so the complete torchvision conv backbone + BN (14.73M params) already transfers at 32px; the "full pretrained transfer" condition holds for both models as compared. Upsampling VGG to 128 would instead be a 16x FLOP increase (0.75 -> ~12 GFLOPs) with changed internal geometry — a different operating point, not a fairness control. A residual caveat is input-statistics mismatch (ImageNet filters see ~224px object scales; a FixRes-style gain at higher VGG resolution cannot be ruled out), but any such gain pays full quadratic compute cost and moves VGG further from the Pareto front; all comparisons are made on the accuracy-vs-FLOPs plane with each model at its native operating point.
-6. **FLOP counting** covers the backbone plus one head; piggymask binarization is a negligible elementwise op at inference and per-task BN swap is free (parameter copy, not compute).
-7. **Energy measurement** uses nvidia-smi board-power sampling at ~5 Hz over a sustained loop; it is coarse but the 2x power separation (83 vs 161 W) far exceeds its noise.
-8. **Growing remains open**: group-aware channel interleaving would restore CPG's third stage on chunk-routed ViTs; the width-sweep evidence (capacity not binding) suggests low accuracy upside on this benchmark, but the mechanism question is open for longer task streams.
+7. **FLOP counting** covers the backbone plus one head; piggymask binarization is a negligible elementwise op at inference and per-task BN swap is free (parameter copy, not compute).
+8. **Energy measurement** uses nvidia-smi board-power sampling at ~5 Hz over a sustained loop; it is coarse but the 2x power separation (83 vs 161 W) far exceeds its noise.
+9. **Growing remains open**: group-aware channel interleaving would restore CPG's third stage on chunk-routed ViTs; the width-sweep evidence (capacity not binding) suggests low accuracy upside on this benchmark, but the mechanism question is open for longer task streams.
 
 ## 11. Engineering appendix (Windows-specific and reproducibility)
 
@@ -442,6 +446,9 @@ python train_cpg_cvit.py --tasks 20 --finetune-epochs 25 --prune-epochs 4 \
 python train_cpg_cvit.py --tasks 4 --finetune-epochs 15
 python train_cpg_cvit.py --tasks 4 --finetune-epochs 15 --control
 
+# post-attention-bias-fix re-run of the proof pair + both headline points x 3 seeds
+bash run_abfix_reruns.sh
+
 # per-task LoRA baseline (frozen pretrained backbone)
 python train_lora_cvit.py --tasks 20 --epochs 29 --variant S --img-size 128 \
     --rank 8 --results-file cvit_lora_20task_S_128.txt
@@ -462,6 +469,10 @@ python measure_latency_energy.py
 | `cvit_cifar/cvit_cpg_20task_pretrained.txt` | Pretrained S (72.17 %) |
 | `cvit_cifar/cvit_cpg_20task_{M,L,XL}_pre.txt` | Pretrained M/L/XL |
 | `cvit_cifar/FAMILY_PARETO.md` | Family Pareto summary |
+| `cvit_cifar/cvit_cpg_20task_{S,XL}_128_abfix_seed{1,2,3}.txt` | Headline @128 points, post-attention-bias-fix, 3 seeds each (exact zero forgetting) |
+| `cvit_cifar/cpg_proof_abfix.log`, `cpg_control_abfix.log` | Post-fix 4-task proof pair (Section 6 matrices) |
+| `cvit_cifar/cvit_cpg_20task_{S,XL}_128*.txt` (non-abfix) | Pre-fix @128 runs, kept for provenance |
+| `cvit_cifar/cvit_lora_20task_*.txt` | Per-task LoRA baseline runs |
 | `cvit_cifar/latency_energy_results.md` | Hardware measurements |
 | `cvit_cifar/grow_cvit.py`, `test_grow_zero_forget.py` | Growing negative result |
 | `PROJECT_DOCUMENTATION.md` | Full 15-section running documentation |

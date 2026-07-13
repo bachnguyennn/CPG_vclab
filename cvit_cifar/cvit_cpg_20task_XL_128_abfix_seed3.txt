@@ -1,0 +1,25 @@
+CViT-CPG : 20 tasks
+avg retained acc 82.23%  BWT +0.000%  frozen-weight-drift 0.00e+00
+CViT-CPG cAPF 560.6 %/GFLOP (0.1467 GFLOPs) vs VGG16-CPG 105.3 %/GFLOP -> 5.3x
+
+per-task retained accuracy (after all tasks):
+  aquatic_mammals                     67.4
+  fish                                82.6
+  flowers                             82.2
+  food_containers                     80.8
+  fruit_and_vegetables                87.8
+  household_electrical_devices        87.0
+  household_furniture                 82.4
+  insects                             86.0
+  large_carnivores                    85.8
+  large_man-made_outdoor_things       89.4
+  large_natural_outdoor_scenes        88.4
+  large_omnivores_and_herbivores      84.8
+  medium_mammals                      88.2
+  non-insect_invertebrates            85.0
+  people                              55.4
+  reptiles                            78.6
+  small_mammals                       76.4
+  trees                               74.2
+  vehicles_1                          90.2
+  vehicles_2                          92.0
