@@ -58,6 +58,34 @@ TASKS = list(SUPERCLASSES.keys())  # ordered, 20 tasks
 _NAME2IDX = {n: i for i, n in enumerate(FINE_NAMES)}
 TASK_FINE_IDX = {t: [_NAME2IDX[f] for f in sorted(fs)] for t, fs in SUPERCLASSES.items()}
 
+
+# ---- 50-task pair split (storage-crossover experiment): 2 fine classes/task ----
+# deterministic seeded pairing of the 100 fine classes; independent of the
+# superclass structure so pairs are diverse
+def _build_pairs(seed=0):
+    rng = np.random.RandomState(seed)
+    perm = rng.permutation(len(FINE_NAMES))
+    tasks = {}
+    for i in range(len(FINE_NAMES) // 2):
+        a, b = sorted(int(v) for v in perm[2 * i:2 * i + 2])
+        tasks['p{:02d}_{}_{}'.format(i, FINE_NAMES[a], FINE_NAMES[b])] = [a, b]
+    return tasks
+
+
+PAIR_FINE_IDX = _build_pairs()
+TASKS_PAIR50 = list(PAIR_FINE_IDX.keys())
+TASK_FINE_IDX.update(PAIR_FINE_IDX)
+
+SPLITS = {'super20': TASKS, 'pair50': TASKS_PAIR50}
+
+
+def get_tasks(split='super20'):
+    return SPLITS[split]
+
+
+def num_classes(task):
+    return len(TASK_FINE_IDX[task])
+
 _cache = None
 
 
@@ -105,9 +133,12 @@ def get_task_loaders(task, batch_size=64, workers=4, img_size=32):
     train_loader = DataLoader(_TaskDS(trx, tryy, True, img_size), batch_size=batch_size, shuffle=True,
                               num_workers=workers, pin_memory=True,
                               persistent_workers=(workers > 0), drop_last=True)
+    # test loaders are retained for the whole run (re-eval of every seen task),
+    # so they must not hold persistent workers: at 50 tasks that is 200+ idle
+    # torch processes -> WinError 1455 (pagefile exhausted). 200-image test
+    # sets don't need workers anyway.
     test_loader = DataLoader(_TaskDS(tex, tey, False, img_size), batch_size=256, shuffle=False,
-                             num_workers=workers, pin_memory=True,
-                             persistent_workers=(workers > 0))
+                             num_workers=0, pin_memory=True)
     return train_loader, test_loader
 
 

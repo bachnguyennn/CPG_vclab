@@ -16,8 +16,8 @@ import argparse
 import torch
 import torch.nn as nn
 
-from lora_cvit_model import LoRACViT
-from task_data import TASKS, get_task_loaders
+from lora_cvit_model import LoRACViT, LoRAConv2d
+from task_data import get_tasks, get_task_loaders, num_classes
 
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -48,6 +48,18 @@ def evaluate_all(model, seen, test_loaders, logit_ref):
     return acc, logit_drift
 
 
+def task_store_bytes(model, name):
+    """Measured fp32 bytes actually saved for one task (adapter + BN + biases +
+    attention-bias tables + head)."""
+    st = model.task_store[name]
+    n = sum(a.numel() + b.numel() for a, b in st['lora'].values())
+    n += sum(t.numel() for d in st['bn'].values() for t in d.values() if t.is_floating_point())
+    n += sum(v.numel() for v in st['bias'].values())
+    n += sum(v.numel() for v in st['attnb'].values())
+    n += sum(p.numel() for p in model.heads[model.datasets.index(name)].parameters())
+    return n * 4
+
+
 def run_task(model, task, train_loader, args):
     model.to(DEVICE)
     crit = nn.CrossEntropyLoss(label_smoothing=0.1)
@@ -64,6 +76,8 @@ def run_task(model, task, train_loader, args):
 
 def main():
     ap = argparse.ArgumentParser()
+    ap.add_argument('--split', type=str, default='super20', choices=['super20', 'pair50'],
+                    help='task decomposition: 20 superclasses x5 or 50 pairs x2')
     ap.add_argument('--tasks', type=int, default=20)
     ap.add_argument('--epochs', type=int, default=29,
                     help='per-task epochs (CPG runs use 25 finetune + 4 prune = 29 total)')
@@ -91,10 +105,14 @@ def main():
     history, seen = [], []
     weight_drift, max_logit_drift = 0.0, 0.0
     per_task_params = None
+    cumrows = []   # (k, task, avg acc over seen, storage MB)
+    backbone_bytes = 4 * sum(m.conv.weight.numel() for m in model.modules()
+                             if isinstance(m, LoRAConv2d))
+    stored_bytes = 0
 
-    tasks = TASKS[:args.tasks]
+    tasks = get_tasks(args.split)[:args.tasks]
     for k, task in enumerate(tasks, start=1):
-        model.add_task(task, 5)
+        model.add_task(task, num_classes(task))
         if per_task_params is None:
             per_task_params = model.per_task_param_count()
         train_loader, test_loader = get_task_loaders(task, batch_size=64, workers=args.workers,
@@ -110,6 +128,11 @@ def main():
         history.append(dict(res))
         print('after task {}: {}'.format(
             k, '  '.join('{}={:.1f}'.format(t[:6], a) for t, a in res.items())), flush=True)
+        stored_bytes += task_store_bytes(model, task)
+        avg_seen = sum(res.values()) / len(res)
+        cumrows.append((k, task, avg_seen, (backbone_bytes + stored_bytes) / 1e6))
+        print('cumulative: avg acc {:.2f}%  storage {:.2f} MB'.format(
+            avg_seen, cumrows[-1][3]), flush=True)
 
     # ---- report (same layout as train_cpg_cvit.py) ----
     print('\n' + '=' * 74)
@@ -162,6 +185,11 @@ def main():
                 avg_retained, bwt, weight_drift, max_logit_drift))
             f.write('cAPF {:.1f} %/GFLOP ({:.4f} GFLOPs merged)  adapter {:.3f}M params/task\n'.format(
                 capf, gflops, per_task_params / 1e6))
+            f.write('\ncumulative (storage-crossover curve): after task k, avg acc over tasks 1..k,\n'
+                    'deployable storage (fp32 backbone + all saved per-task state, measured)\n')
+            f.write('  k  avg_acc  storage_MB\n')
+            for k_, t_, a_, s_ in cumrows:
+                f.write('  {:2d}  {:7.2f}  {:9.3f}   {}\n'.format(k_, a_, s_, t_))
             f.write('\nper-task retained accuracy (after all tasks):\n')
             for t in tasks:
                 if t in history[-1]:

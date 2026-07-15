@@ -25,9 +25,11 @@ import torch
 import torch.nn as nn
 from torch.nn.parameter import Parameter
 
+import math
+
 from sharable_cvit_model import SharableCViT
 from cpg_pruner import CPGPruner, sharable_named
-from task_data import TASKS, get_task_loaders
+from task_data import get_tasks, get_task_loaders, num_classes
 
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -43,6 +45,33 @@ def _logits_and_acc(model, loader):
         correct += (o.argmax(1) == y).sum().item()
         total += y.numel()
     return torch.cat(outs), 100.0 * correct / total
+
+
+def _store_float_numel(store):
+    """Float elements across a per-task store ({task: {name: tensor|state_dict}})."""
+    n = 0
+    for taskd in store.values():
+        for v in taskd.values():
+            if isinstance(v, dict):
+                n += sum(t.numel() for t in v.values() if t.is_floating_point())
+            else:
+                n += v.numel()
+    return n
+
+
+def cpg_storage_bytes(model, masks, k):
+    """Deployable storage after k tasks (measured from the actual stores):
+    shared fp32 backbone + ownership mask (ceil(log2(k+1)) bits/weight) +
+    one binary piggymask per task >= 2 + per-task fp32 state
+    (BN + conv biases + attention-bias tables + heads)."""
+    n_w = sum(m.numel() for m in masks.values())
+    b = n_w * 4                                       # shared masked backbone
+    b += n_w * math.ceil(math.log2(k + 1)) / 8        # ownership mask
+    b += (k - 1) * n_w / 8                            # binarized piggymasks
+    for store in (model.bn_store, model.bias_store, model.attnb_store):
+        b += _store_float_numel(store) * 4
+    b += sum(p.numel() for h in model.heads for p in h.parameters()) * 4
+    return b
 
 
 @torch.no_grad()
@@ -148,6 +177,8 @@ def run_task_control(model, task, train_loader, args):
 
 def main():
     ap = argparse.ArgumentParser()
+    ap.add_argument('--split', type=str, default='super20', choices=['super20', 'pair50'],
+                    help='task decomposition: 20 superclasses x5 or 50 pairs x2')
     ap.add_argument('--tasks', type=int, default=4)
     ap.add_argument('--finetune-epochs', type=int, default=15)
     ap.add_argument('--prune-epochs', type=int, default=4)
@@ -187,9 +218,10 @@ def main():
     history, seen, frozen_ref = [], [], {}
     weight_bit_drift = 0.0
     max_logit_drift = 0.0
+    cumrows = []   # (k, task, avg acc over seen, storage MB, free-weight frac)
     tag = 'CONTROL (fine-tune)' if args.control else 'CViT-CPG'
 
-    tasks = TASKS[:args.tasks]
+    tasks = get_tasks(args.split)[:args.tasks]
     grew_at = 0
     for k, task in enumerate(tasks, start=1):
         # ---- CPG GROWING (unit-granular): fire BEFORE the task's head exists ----
@@ -212,7 +244,7 @@ def main():
                 print('\n*** GROWING before task {}: quanta {} -> {} | {:.2f}M -> {:.2f}M params | '
                       '{:.4f} -> {:.4f} GFLOPs ***'.format(k, q - args.grow_quanta, q, p0, p1, g0, g1),
                       flush=True)
-        model.add_dataset(task, 5)
+        model.add_dataset(task, num_classes(task))
         train_loader, test_loader = get_task_loaders(task, batch_size=64, workers=args.workers,
                                                      img_size=args.img_size)
         test_loaders[task] = test_loader
@@ -236,6 +268,12 @@ def main():
         max_logit_drift = max(max_logit_drift, ld)
         history.append(dict(res))
         print('after task {}: {}'.format(k, '  '.join('{}={:.1f}'.format(t[:6], a) for t, a in res.items())), flush=True)
+        if not args.control:
+            avg_seen = sum(res.values()) / len(res)
+            free = sum(int(m.eq(0).sum()) for m in masks.values()) / sum(m.numel() for m in masks.values())
+            cumrows.append((k, task, avg_seen, cpg_storage_bytes(model, masks, k) / 1e6, free))
+            print('cumulative: avg acc {:.2f}%  storage {:.2f} MB  free weights {:.4f}'.format(
+                avg_seen, cumrows[-1][3], free), flush=True)
 
     # ---- report ----
     print('\n' + '=' * 74)
@@ -300,6 +338,13 @@ def main():
                 avg_retained, bwt, weight_bit_drift))
             f.write('CViT-CPG cAPF {:.1f} %/GFLOP ({:.4f} GFLOPs) vs VGG16-CPG {:.1f} %/GFLOP -> {:.1f}x\n'.format(
                 capf, gflops, vgg_capf, capf / vgg_capf))
+            if cumrows:
+                f.write('\ncumulative (storage-crossover curve): after task k, avg acc over tasks 1..k,\n'
+                        'deployable storage (fp32 backbone + ownership mask + binary piggymasks +\n'
+                        'per-task BN/bias/attn-bias/head), free-weight fraction\n')
+                f.write('  k  avg_acc  storage_MB  free_frac\n')
+                for k_, t_, a_, s_, fr_ in cumrows:
+                    f.write('  {:2d}  {:7.2f}  {:9.3f}  {:.4f}   {}\n'.format(k_, a_, s_, fr_, t_))
             f.write('\nper-task retained accuracy (after all tasks):\n')
             for t in tasks:
                 if t in history[-1]:

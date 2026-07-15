@@ -407,10 +407,28 @@ Findings (reported with full candor — the baseline wins on accuracy):
 
 1. **Per-task LoRA beats CPG masks at every matched budget on this benchmark.** At storage parity (r=2, 0.48 vs ~0.4 MB/task) LoRA leads CPG-S by +0.9; at r=8 it leads by +2.1 (> 5 sigma of CPG's seed spread, seed-stable on both sides) and matches CPG-XL at 6.4x fewer FLOPs. LoRA-XL reaches **84.53 %** — the best number in the entire study, +2.2 over CPG-XL and +2.9 over the ImageNet-pretrained VGG16-CPG control.
 2. **The mechanism explains the gap.** Each LoRA task adapts the *pristine* full pretrained backbone: no pruning tax (CPG compacts each task to 60 % sparsity), no constraint to build on earlier tasks' frozen weights, and order-invariance by construction. CPG pays accuracy for keeping one compact, self-contained backbone.
-3. **The trade-off is storage scaling, and it is honest in both directions.** LoRA state grows strictly linearly with no reuse or compaction — at 20 tasks the r=8 adapters (5.9 M params) already outweigh the S backbone (1.7 M) 3.4x, and rank is a coarse dial (r2 -> r8: +1.2 acc for 2.4x storage). CPG keeps a single backbone whose masks add 1 bit/weight/task and whose weights are *shared* across tasks — the regime where masks win is many tasks under a hard storage budget, not accuracy at 20 tasks.
+3. **The trade-off is storage scaling, and it is honest in both directions.** LoRA state grows strictly linearly with no reuse or compaction — at 20 tasks the r=8 adapters (5.9 M params) already outweigh the S backbone (1.7 M) 3.4x, and rank is a coarse dial (r2 -> r8: +1.2 acc for 2.4x storage). CPG keeps a single backbone whose masks add 1 bit/weight/task and whose weights are *shared* across tasks — which suggests the regime where masks win is many tasks under a hard storage budget, not accuracy at 20 tasks. *That hypothesis is tested directly in Section 9.8 — and refuted.*
 4. **Both mechanisms now measure *exactly* zero forgetting** (BWT +0.000, logit drift 0.00e+00 in every run of both arms). Historically, the LoRA baseline measured exact zero first — because it stored the attention-bias tables per task from the start — which isolated the source of the CPG runs' then-residual ±0.1 % BWT and led directly to the attention-bias fix (Section 5.4). The CPG headline runs in this table postdate that fix. A correctness insight about porting weight-masking CL to attention architectures, discovered by running a baseline with stricter bookkeeping.
 
-### 9.8 Consolidated result narrative
+### 9.8 Storage-crossover study: masks vs adapters over a 50-task sequence
+
+Section 9.7's finding 3 leaves masks one open escape: since piggymasks cost ~1 bit/weight/task while LoRA adapters are fp32, a long enough task sequence should reach a storage budget at which CPG overtakes. This is tested directly on a **50-task split** of CIFAR-100 (2 fine classes per task, deterministic seeded pairing — `pair50` in `task_data.py`), CViT-S@128 pretrained, recipe identical to every headline run (29 total epochs/task, deterministic eval), seed 1. Storage is *measured* deployable state after every task k: fp32 backbone + mechanism state (ownership mask at ceil(log2(k+1)) bits/weight + one binarized piggymask per task, vs. saved LoRA adapters) + the per-task fp32 state both mechanisms need (BatchNorm, conv biases, attention-bias tables, head). Both drivers now emit the cumulative accuracy/storage curve; figure: `cvit_cifar/crossover50_figure.png/.pdf`.
+
+| Method (S@128, 50 tasks) | Retained acc | Total storage | Late slope (MB/task) | BWT | Drift (wt / logit) |
+|---|:---:|:---:|:---:|:---:|:---:|
+| CPG masks | 95.46 % | 30.76 MB | 0.459 | +0.000 % | 0.00e+00 / 0.00e+00 |
+| LoRA r=2  | **96.82 %** | **30.70 MB** | 0.479 | +0.000 % | 0.00e+00 / 0.00e+00 |
+| LoRA r=8  | 96.99 % | 65.27 MB | 1.171 | +0.000 % | 0.00e+00 / 0.00e+00 |
+
+Findings:
+
+1. **No practical crossover.** At 50 tasks LoRA r=2 costs the *same* total storage as CPG (30.70 vs 30.76 MB) and retains +1.36 pts more accuracy. CPG's late-sequence slope is only ~0.02 MB/task shallower, so masks become cheaper in raw bytes only beyond k~53 and save ~2 % of total storage by k=100 — while still trailing in accuracy. The bits-vs-floats argument does not pay off at any practical horizon on this backbone.
+2. **Why: a mechanism-independent per-task fp32 floor dominates both.** Any exact-zero-forgetting method on this backbone must store per-task BN statistics, attention-bias tables, and a head (~0.24 MB/task). CPG's binarized piggymask adds ~0.21 MB/task; LoRA r=2's adapters add ~0.24 MB/task. The *mechanism* is a minority share of the per-task bill on both sides, so the storage lines run near-parallel — the crossover the mask design promises is neutralized by overhead the masks cannot remove. Design implication: to beat adapters on storage, shrink the fp32 floor (shared or quantized per-task BN/head state), not the mask.
+3. **Capacity exhaustion is not CPG's failure mode.** Free weights pin at 4.8 % from ~task 12 onward, yet retained accuracy stays flat (95.2-95.5 %) through task 50 with no growth event — picking alone carries the last 38 tasks. CPG *scales*; it just never overtakes.
+4. **Rank 2 suffices for 2-class tasks:** r=8 buys +0.17 pts over r=2 at 2.1x the storage, so under any storage constraint the right LoRA operating point is small-r — exactly the regime where it ties CPG's budget.
+5. **The bit-exact guarantee extends to 50 tasks for both mechanisms** (BWT +0.000 %, frozen-weight and old-task-logit drift 0.00e+00 in all three runs; the ownership-mask/eval machinery is verified at 2.5x the headline sequence length).
+
+### 9.9 Consolidated result narrative
 
 | Experiment | Configuration | Retained acc | cAPF | Key takeaway |
 |-----------|---------------|:---:|:---:|--------------|
@@ -427,14 +445,15 @@ Findings (reported with full candor — the baseline wins on accuracy):
 | Fairness control | VGG16-CPG, ImageNet init | 81.66 % | 109 | XL@128 still wins with symmetric pretraining |
 | LoRA baseline S | per-task r=8 on frozen S@128 | 82.20 ± 0.26 % (3 seeds) | 3579 | Beats CPG masks at every matched budget |
 | LoRA baseline XL | per-task r=8 on frozen XL@128 | 84.53 % | 576 | Best accuracy in the study; linear storage growth |
+| Crossover 50-task | pair50, CPG vs LoRA r2/r8, S@128 | 95.46 / 96.82 / 96.99 % | — | No practical crossover: LoRA r=2 ties CPG's storage (30.7 MB) at +1.36 acc; per-task fp32 floor dominates both mechanisms |
 
-**One-line claim:** Exact zero-forgetting continual learning — BWT +0.000 %, frozen-weight drift 0.00e+00, and old-task logits reproduced bit-for-bit (logit drift 0.00e+00) in every run — on the CascadedViT family matches and exceeds the original CPG paper's accuracy (82.3 ± 0.3 % over 3 seeds vs 81.2 % with CViT-XL at 128px input, every seed above) at 5x fewer inference FLOPs, and exceeds the VGG16-CPG reproduction at 32x fewer FLOPs (CViT-S @128, 80.1 ± 0.3 %). The advantage survives the fairness control: with identical ImageNet pretraining given to VGG16-CPG (81.66 %), CViT-XL@128 still wins on every seed at 5x fewer FLOPs. Within the same protocol, however, the mechanism comparison is won by per-task low-rank adaptation: LoRA on the frozen backbone exceeds CPG masks at matched storage (82.20 ± 0.26 vs 80.07 ± 0.25 on S; 84.53 vs 82.28 on XL) at the cost of strictly linear per-task storage growth with no weight sharing — the accuracy/storage-scaling trade-off between the two exact-forgetting mechanisms is a central finding of this study. Finally, CPG's growing stage — unsound on chunk-routed attention under the published width-multiplier form (old-task logit drift 0.978) — is restored exactly by unit-granular growth (whole heads and FFN chunks at fixed per-unit dim): a growth event at task 11 of 20 leaves every earlier task bit-preserved in all three seeds (BWT +0.000 %, frozen-weight drift 0.00e+00, accuracy rows exactly flat; retained 71.33 ± 0.50 %).
+**One-line claim:** Exact zero-forgetting continual learning — BWT +0.000 %, frozen-weight drift 0.00e+00, and old-task logits reproduced bit-for-bit (logit drift 0.00e+00) in every run — on the CascadedViT family matches and exceeds the original CPG paper's accuracy (82.3 ± 0.3 % over 3 seeds vs 81.2 % with CViT-XL at 128px input, every seed above) at 5x fewer inference FLOPs, and exceeds the VGG16-CPG reproduction at 32x fewer FLOPs (CViT-S @128, 80.1 ± 0.3 %). The advantage survives the fairness control: with identical ImageNet pretraining given to VGG16-CPG (81.66 %), CViT-XL@128 still wins on every seed at 5x fewer FLOPs. Within the same protocol, however, the mechanism comparison is won by per-task low-rank adaptation: LoRA on the frozen backbone exceeds CPG masks at matched storage (82.20 ± 0.26 vs 80.07 ± 0.25 on S; 84.53 vs 82.28 on XL) at the cost of strictly linear per-task storage growth with no weight sharing — and the storage-crossover this trade-off promises to masks never materializes: over a 50-task sequence LoRA r=2 matches CPG's measured total storage (30.7 MB) while retaining +1.4 pts more accuracy, because a mechanism-independent per-task fp32 floor (BN / attention-bias / head state) dominates both mechanisms' growth. The controlled masks-vs-adapters comparison, including this negative result and its floor decomposition, is a central finding of this study. Finally, CPG's growing stage — unsound on chunk-routed attention under the published width-multiplier form (old-task logit drift 0.978) — is restored exactly by unit-granular growth (whole heads and FFN chunks at fixed per-unit dim): a growth event at task 11 of 20 leaves every earlier task bit-preserved in all three seeds (BWT +0.000 %, frozen-weight drift 0.00e+00, accuracy rows exactly flat; retained 71.33 ± 0.50 %).
 
 ---
 
 ## 10. Threats to validity and limitations
 
-1. **Seed coverage is uneven.** The two headline points carry three seeds each (S@128: 80.07 ± 0.25 %; XL@128: 82.28 ± 0.31 %; every seed above its reference and exactly zero forgetting in all six runs), but the 32px family sweep and the width sweep remain single-seed; the width-sweep 1.5-vs-2.0 inversion (72.27 vs 72.02) and the M-vs-L tie are within plausible seed noise.
+1. **Seed coverage is uneven.** The two headline points carry three seeds each (S@128: 80.07 ± 0.25 %; XL@128: 82.28 ± 0.31 %; every seed above its reference and exactly zero forgetting in all six runs), but the 32px family sweep, the width sweep, and the 50-task crossover study (Section 9.8) remain single-seed; the width-sweep 1.5-vs-2.0 inversion (72.27 vs 72.02) and the M-vs-L tie are within plausible seed noise. The crossover study's storage curves are deterministic given the recipe; its accuracy gap (+1.36) exceeds the headline runs' seed spread (±0.25) but has not been replicated. Its 2-class tasks are also easy (~97 % ceiling), which compresses accuracy gaps; the storage conclusion is unaffected.
 2. **VGG reference gap.** Our VGG16-CPG reference (78.61 %) is 2.6 pts below the paper's 81.2 %, mainly from skipping per-task hyperparameter search; using the paper's number would scale the cAPF ratios down by ~3 % without changing any conclusion.
 3. **Task-aware evaluation.** Like the original CPG, the setting is task-incremental (task id known at test time). Class-incremental inference would need a task-selection mechanism on top.
 4. **Pretraining asymmetry — resolved.** The family results use ImageNet-pretrained CViT backbones while the original VGG reference trains from scratch (per the original protocol). This is now controlled directly: an ImageNet-pretrained VGG16-CPG run (identical official pipeline) reaches 81.66 %, and CViT-XL@128 exceeds it on every seed at 5x fewer FLOPs (section 9.6, finding 6). The from-scratch CViT numbers (70.5–70.8 %) remain reported so the scratch-vs-scratch comparison is also available.
@@ -455,7 +474,7 @@ Findings (reported with full candor — the baseline wins on accuracy):
 | Data | HF `uoft-cs/cifar100` parquet -> `cifar100_32.npz` (torch-free converter; pyarrow+torch in one process segfaults on this setup) |
 | Checkpoints | `official_CPG/checkpoints` is an NTFS junction to `H:\cpg_checkpoints` (C: filled up mid-run and crashed a checkpoint write) |
 | torch.load | torch 2.6 defaults `weights_only=True`; all experiment-1 load sites patched to `weights_only=False` |
-| DataLoaders | `persistent_workers=True` mandatory on Windows: per-epoch worker respawn cost 20+ min/task (GPU 18 %); with the fix, 1.1 s/epoch (GPU 93 %) |
+| DataLoaders | `persistent_workers=True` mandatory on Windows for the *train* loader: per-epoch worker respawn cost 20+ min/task (GPU 18 %); with the fix, 1.1 s/epoch (GPU 93 %). But loaders retained across tasks (the per-task *test* loaders, kept for re-evaluation) must use `num_workers=0`: persistent workers accumulate ~4 idle torch processes x ~1.2 GB commit each per seen task, which exhausts the Windows commit limit near task 30 of a 50-task run (WinError 1455 "paging file too small"; a crashed run also orphans its workers, so the commit stays exhausted until they are killed) |
 | Determinism | eval under `cudnn.deterministic=True, benchmark=False`; training uses benchmark kernels |
 | Multiprocessing | test scripts with module-level model construction need `workers=0` (Windows spawn bootstrap) |
 
@@ -481,6 +500,10 @@ bash run_abfix_reruns.sh
 python train_lora_cvit.py --tasks 20 --epochs 29 --variant S --img-size 128 \
     --rank 8 --results-file cvit_lora_20task_S_128.txt
 
+# 50-task storage-crossover study (CPG + LoRA r8 + LoRA r2, sequential) + figure
+bash run_crossover50.sh
+python plot_crossover.py --out crossover50_figure
+
 # measurements
 python measure_flops.py
 python measure_latency_energy.py
@@ -501,6 +524,7 @@ python measure_latency_energy.py
 | `cvit_cifar/cpg_proof_abfix.log`, `cpg_control_abfix.log` | Post-fix 4-task proof pair (Section 6 matrices) |
 | `cvit_cifar/cvit_cpg_20task_{S,XL}_128*.txt` (non-abfix) | Pre-fix @128 runs, kept for provenance |
 | `cvit_cifar/cvit_lora_20task_*.txt` | Per-task LoRA baseline runs |
+| `cvit_cifar/cvit_{cpg,lora}_pair50_S_128_*.txt`, `crossover50_figure.png/.pdf`, `plot_crossover.py`, `CROSSOVER50.md` | 50-task storage-crossover study (Section 9.8; cumulative accuracy/storage tables in each results file) |
 | `cvit_cifar/latency_energy_results.md` | Hardware measurements |
 | `cvit_cifar/grow_cvit.py`, `test_grow_zero_forget.py` | Naive width-growing negative result (Section 8.1) |
 | `cvit_cifar/grow_units.py`, `test_grow_units_modules.py`, `test_grow_units_zero_forget.py`, `grow_units_gate.log` | Unit-granular growing + bit-level gates (Section 8.2) |
