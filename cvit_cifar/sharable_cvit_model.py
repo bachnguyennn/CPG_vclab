@@ -22,17 +22,24 @@ _CVIT = os.path.join(os.path.dirname(__file__), '..', 'cascaded-vit', 'classific
 sys.path.insert(0, _CVIT)
 from model.cascadedvit import BN_Linear  # noqa: E402
 
-from model_cifar import build_cvit_cifar, build_cvit_hires
+from model_cifar import build_cvit_cifar, build_cvit_grown, build_cvit_hires
 from sharable_cascadedvit import convert_all_convs_to_sharable, SharableConv2d
 
 
 class SharableCViT(nn.Module):
-    def __init__(self, variant='S', width_mult=1.0, img_size=32):
+    def __init__(self, variant='S', width_mult=1.0, img_size=32, grow_quanta=0):
         super().__init__()
         self.variant = variant
         self.width_mult = width_mult
         self.img_size = img_size
-        if img_size == 32:
+        self.grow_quanta = grow_quanta
+        if grow_quanta:
+            # unit-granular growth: whole heads/CFFN chunks appended at fixed
+            # per-unit dim (see grow_units.py)
+            assert img_size == 32 and width_mult == 1.0, \
+                'unit growth is defined on the 32x32 base-width build'
+            base = build_cvit_grown(variant, num_classes=0, quanta=grow_quanta)
+        elif img_size == 32:
             base = build_cvit_cifar(variant, num_classes=0, width_mult=width_mult)  # num_classes=0 -> head Identity
         else:
             # upsampled input + stock stride-16 stem -> full checkpoint transfer

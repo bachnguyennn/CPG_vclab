@@ -33,7 +33,7 @@ Per task, the pipeline has three stages:
 
 1. **Training / picking.** The current task `t` trains only the free weights (`mask == 0`). Gradients of weights owned by earlier tasks are zeroed after every backward pass, so owned weights cannot move (Section 5.2). For tasks `t > 1`, the task may additionally *pick* (reuse, read-only) old weights through a learned binary **piggymask**: a real-valued mask per layer, binarized in the forward pass at threshold 5e-3 with a straight-through estimator, so old weights contribute to the new task's function without being modified.
 2. **Compacting (gradual pruning).** The task's newly trained weights are magnitude-pruned over several epochs on a cubic sparsity schedule up to a target sparsity (60 % in all our runs), then briefly re-finetuned. Surviving weights get `mask = t` and freeze; pruned weights return to `mask = 0` and become the free pool for future tasks.
-3. **Growing.** If the free pool is exhausted, the original method widens every layer by a multiplier and adds the new columns/rows to the free pool. (On CViT this stage turned out to be architecturally unsound — Section 8.)
+3. **Growing.** If the free pool is exhausted, the original method widens every layer by a multiplier and adds the new columns/rows to the free pool. (On CViT the published width-multiplier form is architecturally unsound, but the stage is restored exactly at head/chunk granularity — Section 8.)
 
 Statistics that are inherently task-specific and cannot be masked at weight granularity are stored **per task** and swapped at inference: the classification head, all BatchNorm affine parameters and running statistics, and (our additions, Section 5.4) all convolution biases and the attention-bias tables.
 
@@ -49,7 +49,7 @@ CascadedViT is an EfficientViT-lineage hybrid ViT designed for low-FLOP inferenc
 - **Depthwise convolutions and Squeeze-and-Excitation (SE)** modules inside the stem/downsampling blocks.
 - Three resolution **stages** with per-stage embedding dimension, depth, and head count.
 
-The contiguous-chunk routing in CGA and CFFN is the single most consequential architectural fact in this report: it is what breaks naive network growing (Section 8).
+The contiguous-chunk routing in CGA and CFFN is the single most consequential architectural fact in this report: it is what breaks naive network growing, and what dictates the growth axis that works (Section 8).
 
 ### 2.3 Benchmark
 
@@ -234,15 +234,42 @@ cAPF is the project's own composite metric: it prices retained continual-learnin
 
 ---
 
-## 8. Network growing: a negative result with a precise cause
+## 8. Network growing: a negative result, its precise cause, and the unit-granular fix
 
-CPG's third stage grows the network when free capacity runs out. We implemented growth for CViT (`grow_cvit.py`): build a wider model (width multiplier 1.0 -> 1.5), copy every old tensor into the top-left corner of its widened counterpart, zero-initialize the appended channels ("inert padding"), and extend masks/BN/heads accordingly. The frozen weights transfer **bit-exactly** (weight drift 0.00e+00).
+### 8.1 Naive width growth rewires the routing (negative result)
+
+CPG's third stage grows the network when free capacity runs out. We first implemented the published form for CViT (`grow_cvit.py`): build a wider model (width multiplier 1.0 -> 1.5), copy every old tensor into the top-left corner of its widened counterpart, zero-initialize the appended channels ("inert padding"), and extend masks/BN/heads accordingly. The frozen weights transfer **bit-exactly** (weight drift 0.00e+00).
 
 Nevertheless the regression test (`test_grow_zero_forget.py`) shows old-task **logit drift ~0.978** after growth — the function changed although no weight did. Root cause: CViT routes channels to attention heads and FFN chunks by **contiguous slicing** (`x.chunk(num_heads, dim=1)` / `x.chunk(num_chunks, dim=1)`). With C channels and H heads, head h owns channels [hC/H, (h+1)C/H). Appending channels at the end changes C, so the chunk boundaries move and *old channels are reassigned to different heads*: a channel that fed head 2's attention now feeds head 1's. The composition of frozen weights with the (implicit, index-based) routing function is what defines the old task's function, and growth silently rewired the routing.
 
-Correct growth would require **group-aware channel interleaving**: inserting new capacity *inside each head/chunk partition* so every old channel keeps its head, propagated consistently through every producer/consumer layer, BN, mask tensor, and per-task head. This is intricate and was not implemented. Contrast with VGG, where channels are independent (no chunk routing) and appending at the end is safe — which is why the original CPG never faced this.
+Contrast with VGG, where channels are independent (no chunk routing) and appending at the end is safe — which is why the original CPG never faced this.
 
-**Thesis-relevant conclusion:** naive uniform width-growth is architecturally incompatible with chunk-routed attention ViTs. Given this, and the width-sweep finding that capacity was not the bottleneck anyway (Section 9.1), we replaced dynamic growing with a static width/variant sweep — which also cleanly answers the question growing was meant to answer (how does capacity trade against accuracy?).
+### 8.2 The fix: grow by whole units at fixed per-unit dim
+
+One repair is **group-aware channel interleaving**: insert new capacity *inside* each head/chunk partition so every old channel keeps its head, propagated as a permutation through every producer/consumer layer, BN, mask tensor, and per-task store — intricate and hard to verify. There is a strictly simpler axis. A unit boundary sits at `i * (C/U)` (C channels, U units); growing C and the unit count U **together at constant per-unit dim C/U** leaves every existing boundary in place by arithmetic. So: **append whole units** — attention heads and CFFN chunks. Old heads/chunks then read exactly their old channels through their *unchanged, verbatim-copied* modules; new units read exactly the appended channels; every full-width tensor keeps a global `[old | new]` channel layout, so the dense consumers (attention output projection, PatchMerging, SE, stem, downsample FFNs) transfer correctly by plain top-left copy. This is also the faithful analogue of the original CPG, which grew VGG by appending whole conv filters: the natural structured unit of cascaded group attention is a whole head.
+
+Per growth quantum, per stage: `embed_dim += ed0/2`, `num_heads += nh0/2`, CFFN chunks `2 -> 2+q`. Per-head value dim `d = ed0/nh0`, key_dim (hence the softmax scale), attn_ratio, and CFFN chunk/hidden dims are all unchanged, and the grown model is a stock CascadedViT config: S grows ed [64,128,192] -> [96,192,288], heads [4,4,4] -> [6,6,6], 1.71M -> 3.20M params — *leaner* than the static width-1.5 build (3.80M) at the same embed dims, because unit growth adds block-diagonal structure. The quantum is the lcm of the per-unit dims — ed0/2 per stage on S (even head counts); the nh=3 stages of M/XL would force a full-width quantum, so unit growth is scoped to S here. Implementation: `model_cifar.build_cvit_grown` (+ CFFN num_chunks surgery — the upstream block ctor hardcodes 2) and `grow_units.grow_model_units` (name-keyed transfer: per-unit modules verbatim, dense consumers top-left; per-task BN stores gain *inert* entries for the new units' BNs; the attention-bias store is row-padded — `grow_cvit.py` predates the abfix and dropped that store entirely).
+
+**Verification, module level** (`test_grow_units_modules.py`; CPU, raw upstream CGA/CFFN at S stage-3 geometry): appending one head/chunk reproduces the old function to **0.00e+00** with zero leak into the new channels; widening x1.5 under the identical masked protocol drifts 6.9 (CGA) / 42.8 (CFFN) at activation scale ~8.5 — Section 8.1 in miniature.
+
+**Verification, end to end** (`test_grow_units_zero_forget.py`: train 2 tasks, grow one quantum, recompute): frozen-weight checksums **0.00e+00**; old-task logits **bit-exact on CPU (0.00e+00)**; grown-stage channels **exactly 0** for old tasks — appended units are provably dead until a later task trains them. On CUDA the drift is ~5e-4 under the standard 1e-2 bar: the grown shapes make cuDNN select different (still deterministic) kernels, so float reductions reorder; the CPU run proves the underlying function is identical.
+
+**20-task runs with a mid-stream growth event** (`--grow-at 11`, seeds 1-3, the standard Section-9 recipe, from scratch, 32px):
+
+| Measure | Result (3 seeds) |
+|---------|--------|
+| Growth event (before task 11) | 1.71M -> 3.20M params, 0.0198 -> 0.0372 GFLOPs |
+| Accuracy rows across the event | every row exactly flat in all three runs (max drift 0.000 %) |
+| BWT / frozen-weight drift | **+0.000 % / 0.00e+00 in every seed** |
+| Max in-run logit drift (CUDA) | <= 1.8e-03 (fp reordering; zero argmax flips in any seed) |
+| Retained accuracy | **71.33 ± 0.50 %** (70.89 / 71.87 / 71.23) — every seed above static 1.0 (70.76); static 1.5: 72.27 (both single-seed) |
+| Tasks 11-20 (on grown capacity) | 69.82 % vs 69.44 % in the static-1.0 run (+0.38, matched seed-1 comparison) |
+| cAPF at final geometry | 1907 / 1934 / 1916 %/GFLOP — every seed above static 1.5's 1739 |
+| Per-task serving cost | tasks 1-10 provably use no grown unit -> servable at 0.0198 GFLOPs |
+
+Logs: `cpg_S_growat11_seed{1,2,3}.log`, `cvit_cpg_20task_S_growat11_seed{1,2,3}.txt`.
+
+**Thesis-relevant conclusion (revised):** naive uniform width-growth is architecturally incompatible with chunk-routed attention ViTs — but CPG's growing stage is not: at head/chunk granularity it is restored *exactly*, the zero-forgetting guarantee surviving a mid-stream growth event to the bit. Consistent with the width sweep (Section 9.1), the accuracy upside at 20 tasks is small (seed-mean 71.33 vs the single-seed static rows 70.76 / 72.27; +0.38 on post-growth tasks in the matched comparison); the contribution is the mechanism, plus a deployment property interleaved growth could never offer: growth is structured, so a task provably uses no unit added after it, and earlier tasks are served at their epoch's smaller cost. The static width/variant sweep remains the cleanest answer to the capacity-vs-accuracy question; dynamic growth now answers the mechanism question.
 
 ---
 
@@ -393,14 +420,15 @@ Findings (reported with full candor — the baseline wins on accuracy):
 | Levers | 50 ep cosine; RandomErasing | worse (reverted) | — | Data-regime plateau at ~70.8 % from scratch |
 | Pretrained S | ImageNet init | 72.17 % | 3636 | Only lever that helped (+1.4) |
 | Family | S / M / L / XL pretrained | 72.2 / 72.8 / 72.8 / 74.3 % | 3636 / 1469 / 1020 / 604 | Depth beats width; Pareto frontier |
-| Growing | width 1.0 -> 1.5 transfer | logit drift 0.978 | — | Negative result: chunk routing breaks naive growth |
+| Growing (naive width) | width 1.0 -> 1.5 transfer | logit drift 0.978 | — | Negative result: chunk routing breaks width growth |
+| Growing (unit-granular) | +2 heads / +1 CFFN chunk per stage, before task 11 | 71.33 ± 0.50 % (3 seeds), BWT +0.000 % | 1907-1934 | CPG's third stage restored exactly; rows flat across growth in every seed |
 | Resolution S | S @128, full ckpt transfer | 80.07 ± 0.25 % (3 seeds) | ~3486 | Beats VGG repro at 32x fewer FLOPs, every seed |
 | Resolution XL | XL @128, full ckpt transfer | 82.28 ± 0.31 % (3 seeds) | ~561 | Beats the original CPG paper at 5x fewer FLOPs, every seed |
 | Fairness control | VGG16-CPG, ImageNet init | 81.66 % | 109 | XL@128 still wins with symmetric pretraining |
 | LoRA baseline S | per-task r=8 on frozen S@128 | 82.20 ± 0.26 % (3 seeds) | 3579 | Beats CPG masks at every matched budget |
 | LoRA baseline XL | per-task r=8 on frozen XL@128 | 84.53 % | 576 | Best accuracy in the study; linear storage growth |
 
-**One-line claim:** Exact zero-forgetting continual learning — BWT +0.000 %, frozen-weight drift 0.00e+00, and old-task logits reproduced bit-for-bit (logit drift 0.00e+00) in every run — on the CascadedViT family matches and exceeds the original CPG paper's accuracy (82.3 ± 0.3 % over 3 seeds vs 81.2 % with CViT-XL at 128px input, every seed above) at 5x fewer inference FLOPs, and exceeds the VGG16-CPG reproduction at 32x fewer FLOPs (CViT-S @128, 80.1 ± 0.3 %). The advantage survives the fairness control: with identical ImageNet pretraining given to VGG16-CPG (81.66 %), CViT-XL@128 still wins on every seed at 5x fewer FLOPs. Within the same protocol, however, the mechanism comparison is won by per-task low-rank adaptation: LoRA on the frozen backbone exceeds CPG masks at matched storage (82.20 ± 0.26 vs 80.07 ± 0.25 on S; 84.53 vs 82.28 on XL) at the cost of strictly linear per-task storage growth with no weight sharing — the accuracy/storage-scaling trade-off between the two exact-forgetting mechanisms is a central finding of this study.
+**One-line claim:** Exact zero-forgetting continual learning — BWT +0.000 %, frozen-weight drift 0.00e+00, and old-task logits reproduced bit-for-bit (logit drift 0.00e+00) in every run — on the CascadedViT family matches and exceeds the original CPG paper's accuracy (82.3 ± 0.3 % over 3 seeds vs 81.2 % with CViT-XL at 128px input, every seed above) at 5x fewer inference FLOPs, and exceeds the VGG16-CPG reproduction at 32x fewer FLOPs (CViT-S @128, 80.1 ± 0.3 %). The advantage survives the fairness control: with identical ImageNet pretraining given to VGG16-CPG (81.66 %), CViT-XL@128 still wins on every seed at 5x fewer FLOPs. Within the same protocol, however, the mechanism comparison is won by per-task low-rank adaptation: LoRA on the frozen backbone exceeds CPG masks at matched storage (82.20 ± 0.26 vs 80.07 ± 0.25 on S; 84.53 vs 82.28 on XL) at the cost of strictly linear per-task storage growth with no weight sharing — the accuracy/storage-scaling trade-off between the two exact-forgetting mechanisms is a central finding of this study. Finally, CPG's growing stage — unsound on chunk-routed attention under the published width-multiplier form (old-task logit drift 0.978) — is restored exactly by unit-granular growth (whole heads and FFN chunks at fixed per-unit dim): a growth event at task 11 of 20 leaves every earlier task bit-preserved in all three seeds (BWT +0.000 %, frozen-weight drift 0.00e+00, accuracy rows exactly flat; retained 71.33 ± 0.50 %).
 
 ---
 
@@ -414,7 +442,7 @@ Findings (reported with full candor — the baseline wins on accuracy):
 6. **Resolution asymmetry (32 vs 128) is not a transfer asymmetry.** CViT@128 and VGG@32 differ in input resolution, but the 128px input is a checkpoint-transfer fix, not a compute upgrade: it restores the stock stride-16 stem so the internal geometry is unchanged (still 8x8 maps) and FLOPs rise only 0.0198 -> 0.0230. VGG needs no such fix — its conv stack is fully convolutional, so the complete torchvision conv backbone + BN (14.73M params) already transfers at 32px; the "full pretrained transfer" condition holds for both models as compared. Upsampling VGG to 128 would instead be a 16x FLOP increase (0.75 -> ~12 GFLOPs) with changed internal geometry — a different operating point, not a fairness control. A residual caveat is input-statistics mismatch (ImageNet filters see ~224px object scales; a FixRes-style gain at higher VGG resolution cannot be ruled out), but any such gain pays full quadratic compute cost and moves VGG further from the Pareto front; all comparisons are made on the accuracy-vs-FLOPs plane with each model at its native operating point.
 7. **FLOP counting** covers the backbone plus one head; piggymask binarization is a negligible elementwise op at inference and per-task BN swap is free (parameter copy, not compute).
 8. **Energy measurement** uses nvidia-smi board-power sampling at ~5 Hz over a sustained loop; it is coarse but the 2x power separation (83 vs 161 W) far exceeds its noise.
-9. **Growing remains open**: group-aware channel interleaving would restore CPG's third stage on chunk-routed ViTs; the width-sweep evidence (capacity not binding) suggests low accuracy upside on this benchmark, but the mechanism question is open for longer task streams.
+9. **Growing — resolved at unit granularity, with scope caveats**: unit-granular growth (Section 8.2) restores CPG's third stage exactly on chunk-routed ViTs, verified at bit level across a mid-stream growth event in three seeded runs (BWT +0.000 %, drift 0.00e+00 in every seed). Remaining limits: the growth quantum is the lcm of the per-unit dims (ed0/2 per stage on S; the nh=3 stages of M/XL force a full-width quantum), and the accuracy upside at 20 tasks is small (71.33 ± 0.50 % over 3 seeds, between the single-seed static 1.0/1.5 rows — consistent with capacity not binding) — longer task streams, where capacity does bind, are where the mechanism should matter.
 
 ## 11. Engineering appendix (Windows-specific and reproducibility)
 
@@ -474,5 +502,7 @@ python measure_latency_energy.py
 | `cvit_cifar/cvit_cpg_20task_{S,XL}_128*.txt` (non-abfix) | Pre-fix @128 runs, kept for provenance |
 | `cvit_cifar/cvit_lora_20task_*.txt` | Per-task LoRA baseline runs |
 | `cvit_cifar/latency_energy_results.md` | Hardware measurements |
-| `cvit_cifar/grow_cvit.py`, `test_grow_zero_forget.py` | Growing negative result |
+| `cvit_cifar/grow_cvit.py`, `test_grow_zero_forget.py` | Naive width-growing negative result (Section 8.1) |
+| `cvit_cifar/grow_units.py`, `test_grow_units_modules.py`, `test_grow_units_zero_forget.py`, `grow_units_gate.log` | Unit-granular growing + bit-level gates (Section 8.2) |
+| `cvit_cifar/cpg_S_growat11_seed{1,2,3}.log`, `cvit_cpg_20task_S_growat11_seed{1,2,3}.txt` | 20-task runs with mid-stream growth event (71.33 ± 0.50 %, 3 seeds) |
 | `PROJECT_DOCUMENTATION.md` | Full 15-section running documentation |

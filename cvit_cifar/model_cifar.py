@@ -14,7 +14,7 @@ sys.path.insert(0, _CVIT)
 
 import torch
 import torch.nn as nn
-from model.cascadedvit import CascadedViT, Conv2d_BN
+from model.cascadedvit import CascadedViT, Conv2d_BN, CFFN, Residual
 
 # Variant configs (from cascaded-vit/classification/model/build.py), CIFAR-retargeted.
 VARIANT_CFGS = {
@@ -53,6 +53,53 @@ def build_cvit_cifar(variant='S', num_classes=100, width_mult=1.0):
     model = CascadedViT(num_classes=num_classes, **cfg)
     model.patch_embed = cifar_stem(3, ed[0])   # stride-4 stem
     model.embed_dim = ed
+    return model
+
+
+def _regrow_cffn(model, num_chunks):
+    """Rebuild every CFFN with `num_chunks` chunks (the upstream block ctor
+    hardcodes 2). ed and h are kept, so per-chunk dims stay at the BASE
+    geometry's chunk_dim/hidden_chunk; module names chunk_ffn.0..1 keep their
+    identity and chunk_ffn.2.. are appended. Returns count replaced."""
+    n = 0
+    for mod in model.modules():
+        if isinstance(mod, Residual) and isinstance(mod.m, CFFN):
+            ed = mod.m.num_chunks * mod.m.chunk_dim
+            mod.m = CFFN(ed, int(ed * 2.5), -1, num_chunks=num_chunks)
+            n += 1
+    return n
+
+
+def build_cvit_grown(variant='S', num_classes=100, quanta=1):
+    """CIFAR build grown by whole attention heads + CFFN chunks at FIXED
+    per-unit dim (unit-granular CPG growing; see grow_units.py).
+
+    Per quantum, per stage: embed_dim += ed0/2, num_heads += nh0/2, CFFN
+    chunks 2 -> 2+quanta. Per-head value dim d = ed0/nh0, key_dim, attn_ratio
+    and CFFN chunk_dim = ed0/2 are all UNCHANGED, so every x.chunk() boundary
+    of the base geometry survives: old heads/chunks read exactly their old
+    channels and new units read exactly the appended ones. The result is
+    still a stock CascadedViT config.
+    """
+    if quanta == 0:
+        return build_cvit_cifar(variant, num_classes)
+    base = VARIANT_CFGS[variant]
+    ed0, nh0 = base['embed_dim'], base['num_heads']
+    assert all(n % 2 == 0 for n in nh0), \
+        'unit-growth quantum ed0/2 needs even num_heads per stage (S: [4,4,4]; M/XL have nh=3 stages)'
+    cfg = dict(_COMMON)
+    cfg.update(base)
+    cfg['embed_dim'] = [e + quanta * (e // 2) for e in ed0]
+    cfg['num_heads'] = [n + quanta * (n // 2) for n in nh0]
+    kern = list(base['kernels'])
+    cfg['kernels'] = kern + [kern[-1]] * max(0, max(cfg['num_heads']) - len(kern))
+    for e0, n0, e, n in zip(ed0, nh0, cfg['embed_dim'], cfg['num_heads']):
+        assert e * n0 == e0 * n, 'per-head dim changed'          # d = ed/nh invariant
+        assert e % (2 + quanta) == 0, 'CFFN chunk_dim changed'   # chunk_dim = ed0/2 invariant
+    model = CascadedViT(num_classes=num_classes, **cfg)
+    _regrow_cffn(model, 2 + quanta)
+    model.patch_embed = cifar_stem(3, cfg['embed_dim'][0])   # stride-4 stem
+    model.embed_dim = cfg['embed_dim']
     return model
 
 

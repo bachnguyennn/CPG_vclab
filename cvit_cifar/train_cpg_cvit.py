@@ -161,6 +161,12 @@ def main():
     ap.add_argument('--pretrained', action='store_true', help='init backbone from ImageNet CViT weights')
     ap.add_argument('--img-size', type=int, default=32,
                     help='input resolution; >32 upsamples CIFAR and uses the stock stride-16 stem (full ckpt transfer)')
+    ap.add_argument('--grow-at', type=int, default=0,
+                    help='unit-growth: grow by --grow-quanta before this task index (0 = off)')
+    ap.add_argument('--grow-when-free', type=float, default=0.0,
+                    help='unit-growth: grow when the free-weight fraction drops below this (0 = off)')
+    ap.add_argument('--grow-quanta', type=int, default=1,
+                    help='quanta per growth event (+ed0/2 ch, +nh0/2 heads, +1 CFFN chunk per stage)')
     ap.add_argument('--seed', type=int, default=1)
     ap.add_argument('--results-file', type=str, default='')
     args = ap.parse_args()
@@ -184,7 +190,28 @@ def main():
     tag = 'CONTROL (fine-tune)' if args.control else 'CViT-CPG'
 
     tasks = TASKS[:args.tasks]
+    grew_at = 0
     for k, task in enumerate(tasks, start=1):
+        # ---- CPG GROWING (unit-granular): fire BEFORE the task's head exists ----
+        if not args.control and k > 1 and (args.grow_at == k or args.grow_when_free > 0):
+            fire = args.grow_at == k
+            if not fire:
+                free = sum(int(m.eq(0).sum()) for m in masks.values()) / \
+                       sum(m.numel() for m in masks.values())
+                fire = free < args.grow_when_free
+            if fire:
+                from grow_units import grow_model_units
+                from measure_flops import count
+                q = model.grow_quanta + args.grow_quanta
+                model, masks, piggystore = grow_model_units(model, masks, piggystore, q)
+                grew_at = grew_at or k
+                g0, p0 = count(SharableCViT_forflops(args.variant, args.width_mult, args.img_size,
+                                                     q - args.grow_quanta), size=args.img_size)
+                g1, p1 = count(SharableCViT_forflops(args.variant, args.width_mult, args.img_size, q),
+                               size=args.img_size)
+                print('\n*** GROWING before task {}: quanta {} -> {} | {:.2f}M -> {:.2f}M params | '
+                      '{:.4f} -> {:.4f} GFLOPs ***'.format(k, q - args.grow_quanta, q, p0, p1, g0, g1),
+                      flush=True)
         model.add_dataset(task, 5)
         train_loader, test_loader = get_task_loaders(task, batch_size=64, workers=args.workers,
                                                      img_size=args.img_size)
@@ -245,7 +272,8 @@ def main():
 
     # ---- continual Accuracy-Per-FLOP (cAPF) vs VGG16-CPG ----
     from measure_flops import count
-    gflops, mparams = count(SharableCViT_forflops(args.variant, args.width_mult, args.img_size),
+    final_q = getattr(model, 'grow_quanta', 0)
+    gflops, mparams = count(SharableCViT_forflops(args.variant, args.width_mult, args.img_size, final_q),
                             size=args.img_size)
     capf = avg_retained / gflops
     VGG_ACC, VGG_GFLOPS = 78.6, 0.7467  # our VGG16-CPG reproduction @1.5x, 32x32
@@ -255,10 +283,19 @@ def main():
         avg_retained, gflops, capf, mparams))
     print('  VGG16-CPG (ref) : {:.2f}% / {:.4f} GFLOPs = {:.1f} %/GFLOP'.format(VGG_ACC, VGG_GFLOPS, vgg_capf))
     print('  -> CViT-CPG cAPF is {:.1f}x higher'.format(capf / vgg_capf))
+    if not args.control and grew_at:
+        # unit growth is structured: a task never uses units added after it, so
+        # tasks before the growth event can be SERVED at the pre-growth cost
+        g_base, _ = count(SharableCViT_forflops(args.variant, args.width_mult, args.img_size, 0),
+                          size=args.img_size)
+        print('per-task serving cost: tasks 1..{} use no grown unit -> {:.4f} GFLOPs; '
+              'tasks {}..{} -> {:.4f} GFLOPs'.format(grew_at - 1, g_base, grew_at, len(tasks), gflops))
 
     if args.results_file:
         with open(args.results_file, 'w') as f:
             f.write('{} : {} tasks\n'.format(tag, len(tasks)))
+            if not args.control and grew_at:
+                f.write('unit-growth event before task {} -> quanta {}\n'.format(grew_at, final_q))
             f.write('avg retained acc {:.2f}%  BWT {:+.3f}%  frozen-weight-drift {:.2e}\n'.format(
                 avg_retained, bwt, weight_bit_drift))
             f.write('CViT-CPG cAPF {:.1f} %/GFLOP ({:.4f} GFLOPs) vs VGG16-CPG {:.1f} %/GFLOP -> {:.1f}x\n'.format(
@@ -270,8 +307,8 @@ def main():
         print('\nwrote', args.results_file)
 
 
-def SharableCViT_forflops(variant='S', width_mult=1.0, img_size=32):
-    m = SharableCViT(variant=variant, width_mult=width_mult, img_size=img_size)
+def SharableCViT_forflops(variant='S', width_mult=1.0, img_size=32, grow_quanta=0):
+    m = SharableCViT(variant=variant, width_mult=width_mult, img_size=img_size, grow_quanta=grow_quanta)
     m.add_dataset('t', 5)
     m.set_dataset('t')
     return m

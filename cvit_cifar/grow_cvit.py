@@ -1,7 +1,9 @@
-"""Phase B2: network GROWING for CViT-CPG (the CPG "Growing" mechanism).
+"""Width-multiplier GROWING for CViT-CPG.
 
-When free capacity runs out, widen the network and continue. CViT scales
-uniformly by a width multiplier on embed_dim, so the whole graph grows
+*** NEGATIVE RESULT (TECHNICAL_REPORT.md Section 8) — kept as the recorded
+*** artifact. For the growth axis that actually works, see grow_units.py.
+
+Widen embed_dim uniformly by a width multiplier, so the whole graph grows
 consistently and every tensor can be transferred by a top-left copy:
 
   * frozen conv weights/masks/piggymasks -> top-left of the larger tensors;
@@ -10,13 +12,17 @@ consistently and every tensor can be transferred by a top-left copy:
     inert (BN mean0/var1/weight1/bias0; bias 0).
   * per-task heads -> old input columns copied, new columns 0.
 
-Why old tasks are unaffected (zero forgetting preserved across a growth):
-for task j, apply_mask zeros every weight with mask==0 or mask>j, i.e. all the
-new capacity. New conv out-channels therefore emit 0 (convs are bias-free except
-SqueezeExcite, whose per-task bias new-channels are 0), inert BN keeps them 0,
-and downstream in-columns for new channels are masked to 0 -> the new width is
-fully isolated from task j's function. Verified empirically in
-test_grow_zero_forget.py (frozen-weight drift 0, logit drift ~0 across growth).
+The WEIGHT transfer is bit-exact (frozen-weight drift 0.00e+00), but
+test_grow_zero_forget.py measures old-task LOGIT drift ~0.978: CGA and CFFN
+route channels by contiguous slicing (x.chunk(num_heads/num_chunks, dim=1)),
+and widening moves every chunk boundary, so the frozen weights get composed
+with a REWIRED routing function — the function changes although no weight
+does. Appending whole heads/chunks at fixed per-unit dim keeps every boundary
+in place instead; that variant (grow_units.py) preserves old tasks exactly.
+
+Note this module also predates the per-task attention-bias store (abfix): it
+does not transfer attnb_store, which would additionally break old tasks after
+growth. grow_units.py handles it.
 """
 import torch
 import torch.nn as nn

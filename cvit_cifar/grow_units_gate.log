@@ -1,0 +1,12 @@
+trained task 1 (aquatic_mammals)
+trained task 2 (fish)
+grew 1 quantum: ed [64,128,192]->[96,192,288], heads 4->6/stage, CFFN chunks 2->3 | params 1.71M -> 3.20M | free capacity 60.2%
+task 1 (aquatic_mammals): CUDA logit drift 4.07e-04 | grown-channel max|act| 0.00e+00
+task 2 (fish): CUDA logit drift 4.85e-04 | grown-channel max|act| 0.00e+00
+
+max FROZEN-WEIGHT drift across growth : 0.00e+00
+max LOGIT drift across growth (CUDA)  : 4.85e-04
+max LOGIT drift across growth (CPU)   : 0.00e+00
+max grown-channel |activation|, stage3: 0.00e+00
+
+UNIT-GROWTH ZERO-FORGETTING OK: old tasks preserved across +1 quantum (weights bit-exact; logits exact on CPU; grown units provably dead for old tasks)
