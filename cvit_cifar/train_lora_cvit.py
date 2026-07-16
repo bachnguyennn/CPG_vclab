@@ -49,15 +49,18 @@ def evaluate_all(model, seen, test_loaders, logit_ref):
 
 
 def task_store_bytes(model, name):
-    """Measured fp32 bytes actually saved for one task (adapter + BN + biases +
-    attention-bias tables + head)."""
+    """Measured bytes actually saved for one task (adapter + BN + biases +
+    attention-bias tables + head). Element-size aware so fp16 stores
+    (--store-fp16) are priced at 2 bytes; heads stay fp32."""
     st = model.task_store[name]
-    n = sum(a.numel() + b.numel() for a, b in st['lora'].values())
-    n += sum(t.numel() for d in st['bn'].values() for t in d.values() if t.is_floating_point())
-    n += sum(v.numel() for v in st['bias'].values())
-    n += sum(v.numel() for v in st['attnb'].values())
-    n += sum(p.numel() for p in model.heads[model.datasets.index(name)].parameters())
-    return n * 4
+    b = sum(a.numel() * a.element_size() + t.numel() * t.element_size()
+            for a, t in st['lora'].values())
+    b += sum(t.numel() * t.element_size() for d in st['bn'].values()
+             for t in d.values() if t.is_floating_point())
+    b += sum(v.numel() * v.element_size() for v in st['bias'].values())
+    b += sum(v.numel() * v.element_size() for v in st['attnb'].values())
+    b += sum(p.numel() for p in model.heads[model.datasets.index(name)].parameters()) * 4
+    return b
 
 
 def run_task(model, task, train_loader, args):
@@ -89,6 +92,8 @@ def main():
     ap.add_argument('--variant', type=str, default='S', choices=['S', 'M', 'L', 'XL'])
     ap.add_argument('--img-size', type=int, default=128)
     ap.add_argument('--no-pretrained', action='store_true')
+    ap.add_argument('--store-fp16', action='store_true',
+                    help='keep per-task stores (LoRA A/B, BN, biases, attn biases) in fp16; heads stay fp32')
     ap.add_argument('--seed', type=int, default=1)
     ap.add_argument('--results-file', type=str, default='')
     args = ap.parse_args()
@@ -98,7 +103,8 @@ def main():
     torch.backends.cudnn.deterministic = True
 
     model = LoRACViT(variant=args.variant, img_size=args.img_size, r=args.rank,
-                     alpha=args.alpha, pretrained=not args.no_pretrained).to(DEVICE)
+                     alpha=args.alpha, pretrained=not args.no_pretrained,
+                     store_half=args.store_fp16).to(DEVICE)
     frozen_ref = model.frozen_checksum()
 
     test_loaders, logit_ref = {}, {}
@@ -173,14 +179,16 @@ def main():
     gflops, mparams = count(plain, size=args.img_size)
     capf = avg_retained / gflops
     print('\ninference (LoRA merged): {:.4f} GFLOPs, {:.2f}M backbone params'.format(gflops, mparams))
-    print('per-task adapter cost   : {:.3f}M params/task ({:.2f} MB fp32), grows linearly with tasks'.format(
-        per_task_params / 1e6, per_task_params * 4 / 1e6))
+    print('per-task adapter cost   : {:.3f}M params/task ({:.2f} MB {} measured), grows linearly with tasks'.format(
+        per_task_params / 1e6, task_store_bytes(model, tasks[0]) / 1e6,
+        'fp16-store' if args.store_fp16 else 'fp32'))
     print('cAPF = {:.1f} %/GFLOP'.format(capf))
 
     if args.results_file:
         with open(args.results_file, 'w') as f:
             f.write('Per-task LoRA rank {} on frozen pretrained CViT-{}@{} : {} tasks, {} epochs\n'.format(
                 args.rank, args.variant, args.img_size, len(tasks), args.epochs))
+            f.write('config: store-fp16={}\n'.format(args.store_fp16))
             f.write('avg retained acc {:.2f}%  BWT {:+.3f}%  frozen-weight-drift {:.2e}  logit-drift {:.2e}\n'.format(
                 avg_retained, bwt, weight_drift, max_logit_drift))
             f.write('cAPF {:.1f} %/GFLOP ({:.4f} GFLOPs merged)  adapter {:.3f}M params/task\n'.format(

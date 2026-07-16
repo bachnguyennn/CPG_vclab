@@ -1,0 +1,162 @@
+pretrained init: loaded 831 tensors (1.75M params, 102% of model, 5 attn-bias interpolated), skipped 19
+  skipped by category: {'attn_bias': 5, 'head': 14}
+
+=== [CViT-CPG] TASK 1/20: aquatic_mammals ===
+[goal] sparsity 0.60: train acc 98.76 -> 80.44 (drop 18.32, budget 1.00)
+[goal] sparsity 0.40: train acc 98.76 -> 95.20 (drop 3.56, budget 1.00)
+[goal] sparsity 0.20: train acc 98.76 -> 98.44 (drop 0.32, budget 1.00)
+[goal] task aquatic_mammals compacted at sparsity 0.20
+after task 1: aquati=69.8
+cumulative: avg acc 69.80%  storage 7.20 MB  free weights 0.2021
+
+=== [CViT-CPG] TASK 2/20: fish ===
+[goal] sparsity 0.60: train acc 76.20 -> 96.64 (drop -20.44, budget 1.00)
+[goal] task fish compacted at sparsity 0.60
+after task 2: aquati=69.8  fish=80.8
+cumulative: avg acc 75.30%  storage 7.87 MB  free weights 0.1301
+
+=== [CViT-CPG] TASK 3/20: flowers ===
+[goal] sparsity 0.60: train acc 77.52 -> 96.00 (drop -18.48, budget 1.00)
+[goal] task flowers compacted at sparsity 0.60
+after task 3: aquati=69.8  fish=80.8  flower=81.6
+cumulative: avg acc 77.40%  storage 8.33 MB  free weights 0.0869
+
+=== [CViT-CPG] TASK 4/20: food_containers ===
+[goal] sparsity 0.60: train acc 81.40 -> 95.92 (drop -14.52, budget 1.00)
+[goal] task food_containers compacted at sparsity 0.60
+after task 4: aquati=69.8  fish=80.8  flower=81.6  food_c=82.0
+cumulative: avg acc 78.55%  storage 9.00 MB  free weights 0.0610
+
+=== [CViT-CPG] TASK 5/20: fruit_and_vegetables ===
+[goal] sparsity 0.60: train acc 65.80 -> 98.04 (drop -32.24, budget 1.00)
+[goal] task fruit_and_vegetables compacted at sparsity 0.60
+after task 5: aquati=69.8  fish=80.8  flower=81.6  food_c=82.0  fruit_=88.2
+cumulative: avg acc 80.48%  storage 9.46 MB  free weights 0.0455
+
+=== [CViT-CPG] TASK 6/20: household_electrical_devices ===
+[goal] sparsity 0.60: train acc 84.12 -> 98.52 (drop -14.40, budget 1.00)
+[goal] task household_electrical_devices compacted at sparsity 0.60
+after task 6: aquati=69.8  fish=80.8  flower=81.6  food_c=82.0  fruit_=88.2  househ=86.2
+cumulative: avg acc 81.43%  storage 9.93 MB  free weights 0.0361
+
+=== [CViT-CPG] TASK 7/20: household_furniture ===
+[goal] sparsity 0.60: train acc 83.20 -> 96.48 (drop -13.28, budget 1.00)
+[goal] task household_furniture compacted at sparsity 0.60
+after task 7: aquati=69.8  fish=80.8  flower=81.6  food_c=82.0  fruit_=88.2  househ=86.2  househ=83.2
+cumulative: avg acc 81.69%  storage 10.39 MB  free weights 0.0310
+
+=== [CViT-CPG] TASK 8/20: insects ===
+[goal] sparsity 0.60: train acc 77.72 -> 96.48 (drop -18.76, budget 1.00)
+[goal] task insects compacted at sparsity 0.60
+after task 8: aquati=69.8  fish=80.8  flower=81.6  food_c=82.0  fruit_=88.2  househ=86.2  househ=83.2  insect=84.2
+cumulative: avg acc 82.00%  storage 11.06 MB  free weights 0.0281
+
+=== [CViT-CPG] TASK 9/20: large_carnivores ===
+[goal] sparsity 0.60: train acc 44.68 -> 97.08 (drop -52.40, budget 1.00)
+[goal] task large_carnivores compacted at sparsity 0.60
+after task 9: aquati=69.8  fish=80.8  flower=81.6  food_c=82.0  fruit_=88.2  househ=86.2  househ=83.2  insect=84.2  large_=84.6
+cumulative: avg acc 82.29%  storage 11.52 MB  free weights 0.0264
+
+=== [CViT-CPG] TASK 10/20: large_man-made_outdoor_things ===
+[goal] sparsity 0.60: train acc 91.24 -> 97.44 (drop -6.20, budget 1.00)
+[goal] task large_man-made_outdoor_things compacted at sparsity 0.60
+after task 10: aquati=69.8  fish=80.8  flower=81.6  food_c=82.0  fruit_=88.2  househ=86.2  househ=83.2  insect=84.2  large_=84.6  large_=88.2
+cumulative: avg acc 82.88%  storage 11.98 MB  free weights 0.0253
+
+=== [CViT-CPG] TASK 11/20: large_natural_outdoor_scenes ===
+[goal] sparsity 0.60: train acc 90.60 -> 97.08 (drop -6.48, budget 1.00)
+[goal] task large_natural_outdoor_scenes compacted at sparsity 0.60
+after task 11: aquati=69.8  fish=80.8  flower=81.6  food_c=82.0  fruit_=88.2  househ=86.2  househ=83.2  insect=84.2  large_=84.6  large_=88.2  large_=87.2
+cumulative: avg acc 83.27%  storage 12.44 MB  free weights 0.0247
+
+=== [CViT-CPG] TASK 12/20: large_omnivores_and_herbivores ===
+[goal] sparsity 0.60: train acc 87.92 -> 98.16 (drop -10.24, budget 1.00)
+[goal] task large_omnivores_and_herbivores compacted at sparsity 0.60
+after task 12: aquati=69.8  fish=80.8  flower=81.6  food_c=82.0  fruit_=88.2  househ=86.2  househ=83.2  insect=84.2  large_=84.6  large_=88.2  large_=87.2  large_=81.4
+cumulative: avg acc 83.12%  storage 12.91 MB  free weights 0.0244
+
+=== [CViT-CPG] TASK 13/20: medium_mammals ===
+[goal] sparsity 0.60: train acc 94.64 -> 98.44 (drop -3.80, budget 1.00)
+[goal] task medium_mammals compacted at sparsity 0.60
+after task 13: aquati=69.8  fish=80.8  flower=81.6  food_c=82.0  fruit_=88.2  househ=86.2  househ=83.2  insect=84.2  large_=84.6  large_=88.2  large_=87.2  large_=81.4  medium=87.0
+cumulative: avg acc 83.42%  storage 13.37 MB  free weights 0.0241
+
+=== [CViT-CPG] TASK 14/20: non-insect_invertebrates ===
+[goal] sparsity 0.60: train acc 89.04 -> 98.04 (drop -9.00, budget 1.00)
+[goal] task non-insect_invertebrates compacted at sparsity 0.60
+after task 14: aquati=69.8  fish=80.8  flower=81.6  food_c=82.0  fruit_=88.2  househ=86.2  househ=83.2  insect=84.2  large_=84.6  large_=88.2  large_=87.2  large_=81.4  medium=87.0  non-in=83.2
+cumulative: avg acc 83.40%  storage 13.83 MB  free weights 0.0240
+
+=== [CViT-CPG] TASK 15/20: people ===
+[goal] sparsity 0.60: train acc 65.96 -> 91.96 (drop -26.00, budget 1.00)
+[goal] task people compacted at sparsity 0.60
+after task 15: aquati=69.8  fish=80.8  flower=81.6  food_c=82.0  fruit_=88.2  househ=86.2  househ=83.2  insect=84.2  large_=84.6  large_=88.2  large_=87.2  large_=81.4  medium=87.0  non-in=83.2  people=53.4
+cumulative: avg acc 81.40%  storage 14.29 MB  free weights 0.0239
+
+=== [CViT-CPG] TASK 16/20: reptiles ===
+[goal] sparsity 0.60: train acc 81.80 -> 97.64 (drop -15.84, budget 1.00)
+[goal] task reptiles compacted at sparsity 0.60
+after task 16: aquati=69.8  fish=80.8  flower=81.6  food_c=82.0  fruit_=88.2  househ=86.2  househ=83.2  insect=84.2  large_=84.6  large_=88.2  large_=87.2  large_=81.4  medium=87.0  non-in=83.2  people=53.4  reptil=75.4
+cumulative: avg acc 81.03%  storage 14.96 MB  free weights 0.0239
+
+=== [CViT-CPG] TASK 17/20: small_mammals ===
+[goal] sparsity 0.60: train acc 86.28 -> 96.24 (drop -9.96, budget 1.00)
+[goal] task small_mammals compacted at sparsity 0.60
+after task 17: aquati=69.8  fish=80.8  flower=81.6  food_c=82.0  fruit_=88.2  househ=86.2  househ=83.2  insect=84.2  large_=84.6  large_=88.2  large_=87.2  large_=81.4  medium=87.0  non-in=83.2  people=53.4  reptil=75.4  small_=70.6
+cumulative: avg acc 80.41%  storage 15.43 MB  free weights 0.0239
+
+=== [CViT-CPG] TASK 18/20: trees ===
+[goal] sparsity 0.60: train acc 72.12 -> 93.48 (drop -21.36, budget 1.00)
+[goal] task trees compacted at sparsity 0.60
+after task 18: aquati=69.8  fish=80.8  flower=81.6  food_c=82.0  fruit_=88.2  househ=86.2  househ=83.2  insect=84.2  large_=84.6  large_=88.2  large_=87.2  large_=81.4  medium=87.0  non-in=83.2  people=53.4  reptil=75.4  small_=70.6  trees=73.6
+cumulative: avg acc 80.03%  storage 15.89 MB  free weights 0.0239
+
+=== [CViT-CPG] TASK 19/20: vehicles_1 ===
+[goal] sparsity 0.60: train acc 45.48 -> 97.68 (drop -52.20, budget 1.00)
+[goal] task vehicles_1 compacted at sparsity 0.60
+after task 19: aquati=69.8  fish=80.8  flower=81.6  food_c=82.0  fruit_=88.2  househ=86.2  househ=83.2  insect=84.2  large_=84.6  large_=88.2  large_=87.2  large_=81.4  medium=87.0  non-in=83.2  people=53.4  reptil=75.4  small_=70.6  trees=73.6  vehicl=87.8
+cumulative: avg acc 80.44%  storage 16.35 MB  free weights 0.0238
+
+=== [CViT-CPG] TASK 20/20: vehicles_2 ===
+[goal] sparsity 0.60: train acc 94.00 -> 99.28 (drop -5.28, budget 1.00)
+[goal] task vehicles_2 compacted at sparsity 0.60
+after task 20: aquati=69.8  fish=80.8  flower=81.6  food_c=82.0  fruit_=88.2  househ=86.2  househ=83.2  insect=84.2  large_=84.6  large_=88.2  large_=87.2  large_=81.4  medium=87.0  non-in=83.2  people=53.4  reptil=75.4  small_=70.6  trees=73.6  vehicl=87.8  vehicl=94.4
+cumulative: avg acc 81.14%  storage 16.81 MB  free weights 0.0238
+
+==========================================================================
+CViT-CPG : per-task accuracy (row = task, col = measured after task N)
+==========================================================================
+task \ after      1      2      3      4      5      6      7      8      9     10     11     12     13     14     15     16     17     18     19     20
+aquatic_mamm   69.8   69.8   69.8   69.8   69.8   69.8   69.8   69.8   69.8   69.8   69.8   69.8   69.8   69.8   69.8   69.8   69.8   69.8   69.8   69.8
+fish            -     80.8   80.8   80.8   80.8   80.8   80.8   80.8   80.8   80.8   80.8   80.8   80.8   80.8   80.8   80.8   80.8   80.8   80.8   80.8
+flowers         -      -     81.6   81.6   81.6   81.6   81.6   81.6   81.6   81.6   81.6   81.6   81.6   81.6   81.6   81.6   81.6   81.6   81.6   81.6
+food_contain    -      -      -     82.0   82.0   82.0   82.0   82.0   82.0   82.0   82.0   82.0   82.0   82.0   82.0   82.0   82.0   82.0   82.0   82.0
+fruit_and_ve    -      -      -      -     88.2   88.2   88.2   88.2   88.2   88.2   88.2   88.2   88.2   88.2   88.2   88.2   88.2   88.2   88.2   88.2
+household_el    -      -      -      -      -     86.2   86.2   86.2   86.2   86.2   86.2   86.2   86.2   86.2   86.2   86.2   86.2   86.2   86.2   86.2
+household_fu    -      -      -      -      -      -     83.2   83.2   83.2   83.2   83.2   83.2   83.2   83.2   83.2   83.2   83.2   83.2   83.2   83.2
+insects         -      -      -      -      -      -      -     84.2   84.2   84.2   84.2   84.2   84.2   84.2   84.2   84.2   84.2   84.2   84.2   84.2
+large_carniv    -      -      -      -      -      -      -      -     84.6   84.6   84.6   84.6   84.6   84.6   84.6   84.6   84.6   84.6   84.6   84.6
+large_man-ma    -      -      -      -      -      -      -      -      -     88.2   88.2   88.2   88.2   88.2   88.2   88.2   88.2   88.2   88.2   88.2
+large_natura    -      -      -      -      -      -      -      -      -      -     87.2   87.2   87.2   87.2   87.2   87.2   87.2   87.2   87.2   87.2
+large_omnivo    -      -      -      -      -      -      -      -      -      -      -     81.4   81.4   81.4   81.4   81.4   81.4   81.4   81.4   81.4
+medium_mamma    -      -      -      -      -      -      -      -      -      -      -      -     87.0   87.0   87.0   87.0   87.0   87.0   87.0   87.0
+non-insect_i    -      -      -      -      -      -      -      -      -      -      -      -      -     83.2   83.2   83.2   83.2   83.2   83.2   83.2
+people          -      -      -      -      -      -      -      -      -      -      -      -      -      -     53.4   53.4   53.4   53.4   53.4   53.4
+reptiles        -      -      -      -      -      -      -      -      -      -      -      -      -      -      -     75.4   75.4   75.4   75.4   75.4
+small_mammal    -      -      -      -      -      -      -      -      -      -      -      -      -      -      -      -     70.6   70.6   70.6   70.6
+trees           -      -      -      -      -      -      -      -      -      -      -      -      -      -      -      -      -     73.6   73.6   73.6
+vehicles_1      -      -      -      -      -      -      -      -      -      -      -      -      -      -      -      -      -      -     87.8   87.8
+vehicles_2      -      -      -      -      -      -      -      -      -      -      -      -      -      -      -      -      -      -      -     94.4
+--------------------------------------------------------------------------
+avg RETAINED accuracy (after all tasks)  : 81.14%
+max ACCURACY drift after a task learned  : 0.000%
+Backward Transfer (BWT, ~0 = no forget)  : +0.000%
+max FROZEN-WEIGHT drift (bit-exact)      : 0.00e+00
+max LOGIT drift (function preserved)     : 0.00e+00
+
+continual Accuracy-Per-FLOP (cAPF = retained_acc / inference GFLOPs):
+  CViT-CPG (ours) : 81.14% / 0.0230 GFLOPs = 3532.6 %/GFLOP  (1.72M params)
+  VGG16-CPG (ref) : 78.60% / 0.7467 GFLOPs = 105.3 %/GFLOP
+  -> CViT-CPG cAPF is 33.6x higher
+
+wrote cvit_cpg_20task_S_128_goal_seed1.txt

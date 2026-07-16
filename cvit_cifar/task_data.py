@@ -142,6 +142,16 @@ def get_task_loaders(task, batch_size=64, workers=4, img_size=32):
     return train_loader, test_loader
 
 
+def get_train_eval_loader(task, batch_size=256, img_size=32):
+    """Deterministic, un-augmented loader over the TRAIN split. Used by the
+    accuracy-goal pruning gate: the gate must never see test data, and must be
+    reproducible (no random crop/flip)."""
+    tr_x, tr_y, _, _ = _load_npz()
+    trx, tryy = _subset(tr_x, tr_y, TASK_FINE_IDX[task])
+    return DataLoader(_TaskDS(trx, tryy, False, img_size), batch_size=batch_size,
+                      shuffle=False, num_workers=0, pin_memory=True)
+
+
 if __name__ == '__main__':
     for t in TASKS[:3]:
         tl, vl = get_task_loaders(t, workers=0)

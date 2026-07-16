@@ -47,29 +47,31 @@ def _logits_and_acc(model, loader):
     return torch.cat(outs), 100.0 * correct / total
 
 
-def _store_float_numel(store):
-    """Float elements across a per-task store ({task: {name: tensor|state_dict}})."""
-    n = 0
+def _store_bytes(store):
+    """Bytes of float state across a per-task store ({task: {name: tensor|state_dict}}).
+    Element-size aware so fp16 stores (--store-fp16) are priced at 2 bytes."""
+    b = 0
     for taskd in store.values():
         for v in taskd.values():
-            if isinstance(v, dict):
-                n += sum(t.numel() for t in v.values() if t.is_floating_point())
-            else:
-                n += v.numel()
-    return n
+            ts = v.values() if isinstance(v, dict) else [v]
+            b += sum(t.numel() * t.element_size() for t in ts if t.is_floating_point())
+    return b
 
 
 def cpg_storage_bytes(model, masks, k):
     """Deployable storage after k tasks (measured from the actual stores):
     shared fp32 backbone + ownership mask (ceil(log2(k+1)) bits/weight) +
-    one binary piggymask per task >= 2 + per-task fp32 state
-    (BN + conv biases + attention-bias tables + heads)."""
+    one binary piggymask per task >= 2 + per-task state
+    (BN + conv biases + attention-bias tables + heads). In shared-stats BN
+    mode the running statistics are stored once, not per task."""
     n_w = sum(m.numel() for m in masks.values())
     b = n_w * 4                                       # shared masked backbone
     b += n_w * math.ceil(math.log2(k + 1)) / 8        # ownership mask
     b += (k - 1) * n_w / 8                            # binarized piggymasks
     for store in (model.bn_store, model.bias_store, model.attnb_store):
-        b += _store_float_numel(store) * 4
+        b += _store_bytes(store)
+    if getattr(model, 'bn_mode', 'pertask') == 'shared-stats':
+        b += model.shared_bn_stats_bytes()            # one shared copy
     b += sum(p.numel() for h in model.heads for p in h.parameters()) * 4
     return b
 
@@ -112,6 +114,17 @@ def evaluate_all(model, masks, seen, piggystore, test_loaders, logit_ref, contro
     return acc, logit_drift
 
 
+@torch.no_grad()
+def _acc(model, loader):
+    model.eval()
+    correct = total = 0
+    for x, y in loader:
+        x, y = x.to(DEVICE), y.to(DEVICE)
+        correct += (model(x).argmax(1) == y).sum().item()
+        total += y.numel()
+    return 100.0 * correct / total
+
+
 def run_task_cpg(model, pruner, task, train_loader, args):
     model.set_dataset(task)
     task_id = pruner.current_dataset_idx
@@ -122,6 +135,7 @@ def run_task_cpg(model, pruner, task, train_loader, args):
         for n, m in sharable_named(model):
             m.piggymask = None
     model.to(DEVICE)
+    freeze_stats = args.bn_mode == 'shared-stats' and task_id > 1
 
     crit = nn.CrossEntropyLoss(label_smoothing=0.1)
     w_params = [p for n, p in model.named_parameters() if 'piggymask' not in n and p.requires_grad]
@@ -131,6 +145,8 @@ def run_task_cpg(model, pruner, task, train_loader, args):
 
     for _ in range(args.finetune_epochs):          # finetune (freeze old)
         model.train()
+        if freeze_stats:
+            model.freeze_bn_stats()
         for x, y in train_loader:
             x, y = x.to(DEVICE), y.to(DEVICE)
             opt_w.zero_grad()
@@ -140,20 +156,56 @@ def run_task_cpg(model, pruner, task, train_loader, args):
             opt_w.step()
             if opt_pg: opt_pg.step()
 
+    # ---- compact (prune current task), optionally accuracy-goal-gated ----
+    # adaptive: try the highest sparsity level; if the un-augmented TRAIN-set
+    # accuracy drops more than --goal-drop vs pre-prune, restore the post-
+    # finetune state and retry at the next lower level (the original CPG's
+    # "choose the sparsest level meeting the goal", gated on train data so the
+    # test set is never consulted).
+    levels = [args.target_sparsity]
+    if args.adaptive_sparsity:
+        levels = sorted({float(s) for s in args.sparsity_levels.split(',')}, reverse=True)
+    gate_loader = None
+    pre_acc = None
+    if len(levels) > 1:
+        from task_data import get_train_eval_loader
+        gate_loader = get_train_eval_loader(task, img_size=args.img_size)
+        pre_acc = _acc(model, gate_loader)
+        import copy
+        snap_sd = {k2: v.detach().clone() for k2, v in model.state_dict().items()}
+        snap_masks = {n: mk.clone() for n, mk in pruner.masks.items()}
+        snap_opt = copy.deepcopy(opt_w.state_dict())
+
     steps = len(train_loader)
-    pruner.configure_prune(0.0, args.target_sparsity, 0, args.prune_epochs * steps, max(1, steps // 4))
-    step = 0
-    for _ in range(args.prune_epochs):             # compact (prune current task)
-        model.train()
-        for x, y in train_loader:
-            x, y = x.to(DEVICE), y.to(DEVICE)
-            opt_w.zero_grad()
-            crit(model(x), y).backward()
-            pruner.do_weight_decay_and_make_grads_zero('prune')
-            opt_w.step()
-            pruner.gradually_prune(step)
-            pruner.make_pruned_zero()
-            step += 1
+    for i, lvl in enumerate(levels):
+        if i:   # retry: restore the post-finetune state exactly
+            model.load_state_dict(snap_sd)
+            for n in snap_masks:
+                pruner.masks[n].copy_(snap_masks[n])
+            opt_w.load_state_dict(copy.deepcopy(snap_opt))
+        pruner.configure_prune(0.0, lvl, 0, args.prune_epochs * steps, max(1, steps // 4))
+        step = 0
+        for _ in range(args.prune_epochs):
+            model.train()
+            if freeze_stats:
+                model.freeze_bn_stats()
+            for x, y in train_loader:
+                x, y = x.to(DEVICE), y.to(DEVICE)
+                opt_w.zero_grad()
+                crit(model(x), y).backward()
+                pruner.do_weight_decay_and_make_grads_zero('prune')
+                opt_w.step()
+                pruner.gradually_prune(step)
+                pruner.make_pruned_zero()
+                step += 1
+        if gate_loader is None:
+            break
+        post_acc = _acc(model, gate_loader)
+        print('[goal] sparsity {:.2f}: train acc {:.2f} -> {:.2f} (drop {:.2f}, budget {:.2f})'.format(
+            lvl, pre_acc, post_acc, pre_acc - post_acc, args.goal_drop), flush=True)
+        if pre_acc - post_acc <= args.goal_drop or i == len(levels) - 1:
+            print('[goal] task {} compacted at sparsity {:.2f}'.format(task, lvl), flush=True)
+            break
     model.save_bn(task)
 
 
@@ -183,6 +235,17 @@ def main():
     ap.add_argument('--finetune-epochs', type=int, default=15)
     ap.add_argument('--prune-epochs', type=int, default=4)
     ap.add_argument('--target-sparsity', type=float, default=0.5)
+    ap.add_argument('--adaptive-sparsity', action='store_true',
+                    help='accuracy-goal compaction: retry pruning at lower sparsity when the '
+                         'un-augmented train accuracy drops more than --goal-drop')
+    ap.add_argument('--sparsity-levels', type=str, default='0.6,0.4,0.2',
+                    help='comma-separated sparsity levels, tried highest first (with --adaptive-sparsity)')
+    ap.add_argument('--goal-drop', type=float, default=1.0,
+                    help='max tolerated train-accuracy drop (pts) from compaction before retrying lower')
+    ap.add_argument('--bn-mode', type=str, default='pertask', choices=['pertask', 'shared-stats'],
+                    help='shared-stats: freeze BN running statistics at task-1 values; store only affine per task')
+    ap.add_argument('--store-fp16', action='store_true',
+                    help='keep per-task BN/bias/attention-bias stores in fp16 (quantized at save time)')
     ap.add_argument('--lr', type=float, default=1e-3)
     ap.add_argument('--lr-mask', type=float, default=5e-4)
     ap.add_argument('--workers', type=int, default=4)
@@ -207,8 +270,13 @@ def main():
     torch.backends.cudnn.benchmark = False
     torch.backends.cudnn.deterministic = True
 
+    if args.grow_at or args.grow_when_free:
+        assert args.bn_mode == 'pertask' and not args.store_fp16, \
+            'unit growth pads the per-task stores and expects full fp32 state dicts'
+
     model = SharableCViT(variant=args.variant, width_mult=args.width_mult,
-                         img_size=args.img_size).to(DEVICE)
+                         img_size=args.img_size, bn_mode=args.bn_mode,
+                         store_half=args.store_fp16).to(DEVICE)
     if args.pretrained:
         from pretrained_init import load_pretrained
         from model_cifar import CKPT
@@ -332,6 +400,11 @@ def main():
     if args.results_file:
         with open(args.results_file, 'w') as f:
             f.write('{} : {} tasks\n'.format(tag, len(tasks)))
+            if not args.control:
+                f.write('config: bn-mode={} store-fp16={} adaptive-sparsity={}{}\n'.format(
+                    args.bn_mode, args.store_fp16, args.adaptive_sparsity,
+                    ' levels={} goal-drop={}'.format(args.sparsity_levels, args.goal_drop)
+                    if args.adaptive_sparsity else ''))
             if not args.control and grew_at:
                 f.write('unit-growth event before task {} -> quanta {}\n'.format(grew_at, final_q))
             f.write('avg retained acc {:.2f}%  BWT {:+.3f}%  frozen-weight-drift {:.2e}\n'.format(

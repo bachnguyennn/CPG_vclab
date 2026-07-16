@@ -69,9 +69,16 @@ def wrap_all_convs(root, r, alpha):
 
 
 class LoRACViT(nn.Module):
-    def __init__(self, variant='S', img_size=128, r=8, alpha=16.0, pretrained=True):
+    def __init__(self, variant='S', img_size=128, r=8, alpha=16.0, pretrained=True,
+                 store_half=False):
         super().__init__()
         self.variant, self.img_size, self.r = variant, img_size, r
+        # store_half: per-task saved state (LoRA A/B + BN + biases + attention
+        # biases) kept in fp16 — the symmetric treatment to CPG's --store-fp16.
+        # Heads stay fp32 on both sides. Evaluation always restores from the
+        # store, so reference logits reflect the quantized state and the
+        # logit-identity instrument stays exact.
+        self.store_half = store_half
         if img_size == 32:
             base = build_cvit_cifar(variant, num_classes=0)
         else:
@@ -119,21 +126,31 @@ class LoRACViT(nn.Module):
         self._pristine = self._snapshot_shared()
 
     # ---- shared-state snapshot/restore (BN + conv biases + attention biases) ----
-    def _snapshot_shared(self):
+    def _snap(self, t, quantize):
+        t = t.detach().clone()
+        if quantize and self.store_half and t.is_floating_point():
+            t = t.half()
+        return t
+
+    def _snapshot_shared(self, quantize=False):
+        """quantize=False for the pristine reset snapshot (must stay exact);
+        True for the per-task store (that is the deployable state being priced)."""
         mods = dict(self.named_modules())
         params = dict(self.named_parameters())
         return {
-            'bn': {n_: {k: v.detach().clone() for k, v in mods[n_].state_dict().items()}
+            'bn': {n_: {k: self._snap(v, quantize) for k, v in mods[n_].state_dict().items()}
                    for n_ in self._bn_names},
-            'bias': {n_: mods[n_].conv.bias.detach().clone() for n_ in self._bias_names},
-            'attnb': {n_: params[n_].detach().clone() for n_ in self._attnb_names},
+            'bias': {n_: self._snap(mods[n_].conv.bias, quantize) for n_ in self._bias_names},
+            'attnb': {n_: self._snap(params[n_], quantize) for n_ in self._attnb_names},
         }
 
     def _restore_shared(self, snap):
         mods = dict(self.named_modules())
         params = dict(self.named_parameters())
         for n_, st in snap['bn'].items():
-            mods[n_].load_state_dict(st)
+            tgt = mods[n_].state_dict()
+            for k, v in st.items():     # per-key copy: casts fp16 stores back
+                tgt[k].copy_(v)
         for n_, v in snap['bias'].items():
             mods[n_].conv.bias.data.copy_(v)
         for n_, v in snap['attnb'].items():
@@ -153,8 +170,8 @@ class LoRACViT(nn.Module):
 
     def save_task(self, name):
         mods = dict(self.named_modules())
-        st = self._snapshot_shared()
-        st['lora'] = {n_: (mods[n_].lora_A.detach().clone(), mods[n_].lora_B.detach().clone())
+        st = self._snapshot_shared(quantize=True)
+        st['lora'] = {n_: (self._snap(mods[n_].lora_A, True), self._snap(mods[n_].lora_B, True))
                       for n_ in self._lora_names}
         self.task_store[name] = st
 

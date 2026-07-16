@@ -27,12 +27,24 @@ from sharable_cascadedvit import convert_all_convs_to_sharable, SharableConv2d
 
 
 class SharableCViT(nn.Module):
-    def __init__(self, variant='S', width_mult=1.0, img_size=32, grow_quanta=0):
+    def __init__(self, variant='S', width_mult=1.0, img_size=32, grow_quanta=0,
+                 bn_mode='pertask', store_half=False):
         super().__init__()
         self.variant = variant
         self.width_mult = width_mult
         self.img_size = img_size
         self.grow_quanta = grow_quanta
+        # per-task state-floor levers (storage-crossover follow-up):
+        #   bn_mode 'shared-stats': BN running statistics stay at their task-1
+        #     values forever (frozen during later tasks via eval-mode BN); only
+        #     the affine (weight/bias) is stored per task.
+        #   store_half: per-task BN/bias/attn-bias stores kept in fp16. The
+        #     quantization is applied at SAVE time and immediately loaded back,
+        #     so the freeze-time reference logits already reflect the rounded
+        #     state and the bit-exact logit-identity instrument still applies.
+        assert bn_mode in ('pertask', 'shared-stats')
+        self.bn_mode = bn_mode
+        self.store_half = store_half
         if grow_quanta:
             # unit-granular growth: whole heads/CFFN chunks appended at fixed
             # per-unit dim (see grow_units.py)
@@ -87,13 +99,28 @@ class SharableCViT(nn.Module):
         assert name in self.datasets
         self.active = self.datasets.index(name)
 
+    def _snap(self, t):
+        t = t.detach().clone()
+        if self.store_half and t.is_floating_point():
+            t = t.half()
+        return t
+
     def save_bn(self, name):
         mods = dict(self.named_modules())
-        self.bn_store[name] = {bn: {k: v.detach().clone() for k, v in mods[bn].state_dict().items()}
-                               for bn in self._bn_names}
-        self.bias_store[name] = {b: mods[b].bias.detach().clone() for b in self._bias_names}
-        self.attnb_store[name] = {a: mods[a].attention_biases.detach().clone()
+        affine_only = self.bn_mode == 'shared-stats'
+        self.bn_store[name] = {}
+        for bn in self._bn_names:
+            st = mods[bn].state_dict()
+            keys = ('weight', 'bias') if affine_only else list(st.keys())
+            self.bn_store[name][bn] = {k: self._snap(st[k]) for k in keys}
+        self.bias_store[name] = {b: self._snap(mods[b].bias) for b in self._bias_names}
+        self.attnb_store[name] = {a: self._snap(mods[a].attention_biases)
                                   for a in self._attn_names}
+        if self.store_half:
+            # round-trip immediately: the live model must equal the store, so
+            # the reference logits captured right after this task are already
+            # the fp16-quantized function (drift instruments stay exact)
+            self.load_bn(name)
 
     @torch.no_grad()
     def load_bn(self, name):
@@ -101,7 +128,9 @@ class SharableCViT(nn.Module):
             return
         mods = dict(self.named_modules())
         for bn, st in self.bn_store[name].items():
-            mods[bn].load_state_dict(st)
+            tgt = mods[bn].state_dict()
+            for k, v in st.items():   # per-key copy: casts fp16 store back, and
+                tgt[k].copy_(v)       # tolerates affine-only entries (shared stats)
         for b, val in self.bias_store.get(name, {}).items():
             mods[b].bias.data.copy_(val)
         for a, val in self.attnb_store.get(name, {}).items():
@@ -111,6 +140,22 @@ class SharableCViT(nn.Module):
             # eval; refresh it or the restore is invisible at eval time
             if hasattr(m, 'ab'):
                 m.ab = m.attention_biases[:, m.attention_bias_idxs]
+
+    def freeze_bn_stats(self):
+        """shared-stats mode, tasks > 1: switch every BACKBONE BN to eval mode
+        after model.train() so running statistics stay at their task-1 values.
+        Affine parameters still receive gradients and train normally. The
+        per-task head's own BN is excluded — it is per-task state anyway and
+        must keep adapting to its task."""
+        mods = dict(self.named_modules())
+        for n in self._bn_names:
+            mods[n].eval()
+
+    def shared_bn_stats_bytes(self):
+        """One-off storage of the shared (task-1) backbone BN running stats."""
+        mods = dict(self.named_modules())
+        return sum(mods[n].running_mean.numel() + mods[n].running_var.numel()
+                   for n in self._bn_names) * 4
 
     def forward(self, x):
         x = self.patch_embed(x)

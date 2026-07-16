@@ -1,0 +1,111 @@
+CViT-CPG : 50 tasks
+config: bn-mode=pertask store-fp16=True adaptive-sparsity=False
+avg retained acc 95.06%  BWT +0.000%  frozen-weight-drift 0.00e+00
+CViT-CPG cAPF 4138.6 %/GFLOP (0.0230 GFLOPs) vs VGG16-CPG 105.3 %/GFLOP -> 39.3x
+
+cumulative (storage-crossover curve): after task k, avg acc over tasks 1..k,
+deployable storage (fp32 backbone + ownership mask + binary piggymasks +
+per-task BN/bias/attn-bias/head), free-weight fraction
+  k  avg_acc  storage_MB  free_frac
+   1    84.00      7.071  0.6002   p00_crab_telephone
+   2    87.00      7.618  0.3736   p01_baby_otter
+   3    89.50      7.955  0.2440   p02_skunk_turtle
+   4    91.75      8.501  0.1638   p03_can_shark
+   5    93.10      8.838  0.1170   p04_orchid_whale
+   6    93.83      9.174  0.0889   p05_orange_tulip
+   7    94.43      9.511  0.0721   p06_bus_snake
+   8    94.75     10.058  0.0620   p07_beetle_dolphin
+   9    94.56     10.394  0.0564   p08_clock_cockroach
+  10    94.75     10.731  0.0529   p09_bicycle_forest
+  11    95.05     11.067  0.0510   p10_lion_poppy
+  12    95.33     11.404  0.0499   p11_bear_sea
+  13    95.42     11.740  0.0493   p12_lobster_motorcycle
+  14    95.64     12.076  0.0489   p13_bee_worm
+  15    95.87     12.413  0.0486   p14_skyscraper_sunflower
+  16    96.12     12.960  0.0485   p15_plain_squirrel
+  17    95.97     13.296  0.0484   p16_road_train
+  18    95.78     13.633  0.0484   p17_crocodile_mushroom
+  19    95.84     13.969  0.0483   p18_caterpillar_palm_tree
+  20    95.35     14.306  0.0483   p19_porcupine_shrew
+  21    95.48     14.642  0.0483   p20_aquarium_fish_plate
+  22    95.52     14.979  0.0483   p21_lawn_mower_leopard
+  23    95.35     15.315  0.0483   p22_beaver_camel
+  24    95.50     15.652  0.0483   p23_castle_lamp
+  25    95.56     15.988  0.0483   p24_bed_kangaroo
+  26    95.58     16.324  0.0483   p25_pine_tree_trout
+  27    95.72     16.661  0.0483   p26_apple_fox
+  28    95.77     16.997  0.0483   p27_cup_mouse
+  29    94.76     17.334  0.0482   p28_boy_girl
+  30    94.92     17.670  0.0482   p29_cloud_oak_tree
+  31    94.95     18.007  0.0482   p30_bowl_elephant
+  32    95.05     18.554  0.0482   p31_pear_raccoon
+  33    95.09     18.890  0.0482   p32_spider_tank
+  34    94.94     19.227  0.0482   p33_flatfish_table
+  35    94.94     19.563  0.0482   p34_butterfly_tractor
+  36    94.79     19.900  0.0482   p35_cattle_dinosaur
+  37    94.85     20.236  0.0482   p36_mountain_wolf
+  38    94.91     20.572  0.0482   p37_rocket_woman
+  39    94.96     20.909  0.0482   p38_chair_wardrobe
+  40    94.83     21.245  0.0482   p39_seal_snail
+  41    94.80     21.582  0.0481   p40_couch_house
+  42    94.86     21.918  0.0481   p41_man_streetcar
+  43    94.86     22.255  0.0481   p42_keyboard_rabbit
+  44    94.86     22.591  0.0481   p43_bridge_pickup_truck
+  45    94.93     22.928  0.0481   p44_rose_tiger
+  46    95.01     23.264  0.0481   p45_hamster_television
+  47    95.09     23.601  0.0481   p46_chimpanzee_sweet_pepper
+  48    95.09     23.937  0.0481   p47_bottle_willow_tree
+  49    95.00     24.273  0.0481   p48_possum_ray
+  50    95.06     24.610  0.0481   p49_lizard_maple_tree
+
+per-task retained accuracy (after all tasks):
+  p00_crab_telephone                  84.0
+  p01_baby_otter                      90.0
+  p02_skunk_turtle                    94.5
+  p03_can_shark                       98.5
+  p04_orchid_whale                    98.5
+  p05_orange_tulip                    97.5
+  p06_bus_snake                       98.0
+  p07_beetle_dolphin                  97.0
+  p08_clock_cockroach                 93.0
+  p09_bicycle_forest                  96.5
+  p10_lion_poppy                      98.0
+  p11_bear_sea                        98.5
+  p12_lobster_motorcycle              96.5
+  p13_bee_worm                        98.5
+  p14_skyscraper_sunflower            99.0
+  p15_plain_squirrel                  100.0
+  p16_road_train                      93.5
+  p17_crocodile_mushroom              92.5
+  p18_caterpillar_palm_tree           97.0
+  p19_porcupine_shrew                 86.0
+  p20_aquarium_fish_plate             98.0
+  p21_lawn_mower_leopard              96.5
+  p22_beaver_camel                    91.5
+  p23_castle_lamp                     99.0
+  p24_bed_kangaroo                    97.0
+  p25_pine_tree_trout                 96.0
+  p26_apple_fox                       99.5
+  p27_cup_mouse                       97.0
+  p28_boy_girl                        66.5
+  p29_cloud_oak_tree                  99.5
+  p30_bowl_elephant                   96.0
+  p31_pear_raccoon                    98.0
+  p32_spider_tank                     96.5
+  p33_flatfish_table                  90.0
+  p34_butterfly_tractor               95.0
+  p35_cattle_dinosaur                 89.5
+  p36_mountain_wolf                   97.0
+  p37_rocket_woman                    97.0
+  p38_chair_wardrobe                  97.0
+  p39_seal_snail                      89.5
+  p40_couch_house                     94.0
+  p41_man_streetcar                   97.0
+  p42_keyboard_rabbit                 95.0
+  p43_bridge_pickup_truck             95.0
+  p44_rose_tiger                      98.0
+  p45_hamster_television              98.5
+  p46_chimpanzee_sweet_pepper         98.5
+  p47_bottle_willow_tree              95.5
+  p48_possum_ray                      90.5
+  p49_lizard_maple_tree               98.0

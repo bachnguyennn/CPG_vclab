@@ -20,10 +20,16 @@ import matplotlib.patheffects as pe
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 SERIES = [
-    # (label, results file, hex)  -- categorical slots 1..3, fixed order
-    ('CPG masks',  'cvit_cpg_pair50_S_128_seed1.txt',      '#2a78d6'),
-    ('LoRA r=8',   'cvit_lora_pair50_S_128_r8_seed1.txt',  '#1baf7a'),
-    ('LoRA r=2',   'cvit_lora_pair50_S_128_r2_seed1.txt',  '#eda100'),
+    # (label, results file, hex, linestyle)  -- categorical slots 1..3, fixed order
+    ('CPG masks',  'cvit_cpg_pair50_S_128_seed1.txt',      '#2a78d6', '-'),
+    ('LoRA r=8',   'cvit_lora_pair50_S_128_r8_seed1.txt',  '#1baf7a', '-'),
+    ('LoRA r=2',   'cvit_lora_pair50_S_128_r2_seed1.txt',  '#eda100', '-'),
+]
+
+# matched-precision arms (Section 9.9), overlaid with --fp16 as dashed curves
+SERIES_FP16 = [
+    ('CPG fp16',      'cvit_cpg_pair50_S_128_fp16_seed1.txt',      '#2a78d6', (0, (4, 2))),
+    ('LoRA r=2 fp16', 'cvit_lora_pair50_S_128_r2_fp16_seed1.txt',  '#eda100', (0, (4, 2))),
 ]
 
 INK, MUTED, GRID, BASE, SURFACE = '#0b0b0b', '#898781', '#e1e0d9', '#c3c2b7', '#fcfcfb'
@@ -79,21 +85,24 @@ def style_axis(ax):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--out', default='crossover_figure')
+    ap.add_argument('--fp16', action='store_true',
+                    help='overlay the matched-precision fp16 arms (Section 9.9) as dashed curves')
     args = ap.parse_args()
 
+    series = SERIES + (SERIES_FP16 if args.fp16 else [])
     data = []
-    for label, fname, color in SERIES:
+    for label, fname, color, ls in series:
         ks, accs, mbs = parse_cumulative(os.path.join(HERE, fname))
-        data.append((label, color, ks, accs, mbs))
+        data.append((label, color, ls, ks, accs, mbs))
 
     fig, (axA, axB) = plt.subplots(1, 2, figsize=(10, 4.2), dpi=150)
     fig.patch.set_facecolor(SURFACE)
 
     # Panel A: storage vs tasks learned
-    for label, color, ks, accs, mbs in data:
-        axA.plot(ks, mbs, color=color, linewidth=2)
+    for label, color, ls, ks, accs, mbs in data:
+        axA.plot(ks, mbs, color=color, linewidth=2, linestyle=ls)
     style_axis(axA)
-    end_labels(axA, [(ks[-1], mbs[-1], label) for label, color, ks, accs, mbs in data])
+    end_labels(axA, [(ks[-1], mbs[-1], label) for label, color, ls, ks, accs, mbs in data])
     axA.set_xlabel('tasks learned', color=MUTED, fontsize=10)
     axA.set_ylabel('total deployable storage (MB)', color=MUTED, fontsize=10)
     axA.set_title('A. Storage growth over the task sequence',
@@ -104,7 +113,7 @@ def main():
     # crossover marker: first k>1 where LoRA r=8 storage exceeds CPG storage
     # (skip if r=8 is above from the very first task -- no crossover to mark)
     cpg, r8 = data[0], data[1]
-    for k, s_cpg, s_r8 in zip(cpg[2], cpg[4], r8[4]):
+    for k, s_cpg, s_r8 in zip(cpg[3], cpg[5], r8[5]):
         if s_r8 > s_cpg:
             if k > 1:
                 axA.axvline(k, color=MUTED, linewidth=1, linestyle=(0, (4, 3)))
@@ -115,8 +124,8 @@ def main():
 
     # Panel B: accuracy vs storage (the fixed-budget view)
     halo = [pe.withStroke(linewidth=2.5, foreground=SURFACE)]
-    for label, color, ks, accs, mbs in data:
-        axB.plot(mbs, accs, color=color, linewidth=2)
+    for label, color, ls, ks, accs, mbs in data:
+        axB.plot(mbs, accs, color=color, linewidth=2, linestyle=ls)
         for k, a, s in zip(ks, accs, mbs):
             if k in (10, 30, 50):
                 axB.plot([s], [a], marker='o', markersize=4.5, color=color,
@@ -126,14 +135,15 @@ def main():
                                  textcoords='offset points', ha='center',
                                  fontsize=7.5, color=MUTED, path_effects=halo)
     style_axis(axB)
-    end_labels(axB, [(mbs[-1], accs[-1], label) for label, color, ks, accs, mbs in data])
+    end_labels(axB, [(mbs[-1], accs[-1], label) for label, color, ls, ks, accs, mbs in data])
     axB.set_xlabel('total deployable storage (MB)', color=MUTED, fontsize=10)
     axB.set_ylabel('avg retained accuracy over seen tasks (%)', color=MUTED, fontsize=10)
     axB.set_title('B. Accuracy per storage budget (curves traced by k)',
                   color=INK, fontsize=11, loc='left')
     axB.set_xmargin(0.18)
 
-    handles = [plt.Line2D([], [], color=c, linewidth=2, label=l) for l, c, *_ in data]
+    handles = [plt.Line2D([], [], color=c, linewidth=2, linestyle=ls, label=l)
+               for l, c, ls, *_ in data]
     axB.legend(handles=handles, loc='lower right', fontsize=8.5,
                frameon=False, labelcolor=INK)
 
