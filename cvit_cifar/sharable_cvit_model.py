@@ -24,11 +24,12 @@ from model.cascadedvit import BN_Linear  # noqa: E402
 
 from model_cifar import build_cvit_cifar, build_cvit_grown, build_cvit_hires
 from sharable_cascadedvit import convert_all_convs_to_sharable, SharableConv2d
+from store_quant import sign_scale, priced_bytes_1bit
 
 
 class SharableCViT(nn.Module):
     def __init__(self, variant='S', width_mult=1.0, img_size=32, grow_quanta=0,
-                 bn_mode='pertask', store_half=False):
+                 bn_mode='pertask', store_mode='fp32'):
         super().__init__()
         self.variant = variant
         self.width_mult = width_mult
@@ -38,13 +39,18 @@ class SharableCViT(nn.Module):
         #   bn_mode 'shared-stats': BN running statistics stay at their task-1
         #     values forever (frozen during later tasks via eval-mode BN); only
         #     the affine (weight/bias) is stored per task.
-        #   store_half: per-task BN/bias/attn-bias stores kept in fp16. The
-        #     quantization is applied at SAVE time and immediately loaded back,
-        #     so the freeze-time reference logits already reflect the rounded
-        #     state and the bit-exact logit-identity instrument still applies.
+        #   store_mode 'fp16': per-task BN/bias/attn-bias stores kept in fp16.
+        #     The quantization is applied at SAVE time and immediately loaded
+        #     back, so the freeze-time reference logits already reflect the
+        #     rounded state and the bit-exact logit-identity instrument still
+        #     applies.
+        #   store_mode '1bit': BitDelta-style sign+scale stores, chained
+        #     against the previous task's store (task 1 = fp16 chain base);
+        #     same save-time round-trip discipline. See store_quant.py.
         assert bn_mode in ('pertask', 'shared-stats')
+        assert store_mode in ('fp32', 'fp16', '1bit')
         self.bn_mode = bn_mode
-        self.store_half = store_half
+        self.store_mode = store_mode
         if grow_quanta:
             # unit-granular growth: whole heads/CFFN chunks appended at fixed
             # per-unit dim (see grow_units.py)
@@ -87,6 +93,9 @@ class SharableCViT(nn.Module):
         self.bn_store = {}
         self.bias_store = {}
         self.attnb_store = {}
+        # deployable bytes of each task's store under store_mode's encoding
+        # (float tensors only, same convention as _store_bytes)
+        self.store_priced_bytes = {}
 
     # ---- task management ----
     def add_dataset(self, name, num_classes):
@@ -99,27 +108,54 @@ class SharableCViT(nn.Module):
         assert name in self.datasets
         self.active = self.datasets.index(name)
 
-    def _snap(self, t):
-        t = t.detach().clone()
-        if self.store_half and t.is_floating_point():
-            t = t.half()
-        return t
-
     def save_bn(self, name):
         mods = dict(self.named_modules())
         affine_only = self.bn_mode == 'shared-stats'
+        idx = self.datasets.index(name)
+        # 1bit: chain each task's store against the previous task's store
+        # (task 1 is the fp16 chain base — consecutive CPG tasks differ
+        # little, so chained deltas stay small)
+        onebit = self.store_mode == '1bit' and idx > 0
+        prev = self.datasets[idx - 1] if onebit else None
+        priced = 0.0
+
+        def enc(t, ref, is_stat=False):
+            nonlocal priced
+            t = t.detach().clone()
+            if not t.is_floating_point():
+                return t   # num_batches_tracked: kept, never priced as float
+            if onebit and not is_stat:
+                priced += priced_bytes_1bit(t)
+                return sign_scale(t, ref)
+            # fp16 store; also the 1bit chain's task-1 base AND the BN running
+            # statistics in 1bit mode — stats are measurements, not trained
+            # deltas, and a per-tensor sign+scale collapses them (tasks >= 2
+            # drop to chance; the fp16-stats/1bit-params split is the policy)
+            if self.store_mode in ('fp16', '1bit'):
+                t = t.half()
+            priced += t.numel() * t.element_size()
+            return t
+
         self.bn_store[name] = {}
         for bn in self._bn_names:
             st = mods[bn].state_dict()
             keys = ('weight', 'bias') if affine_only else list(st.keys())
-            self.bn_store[name][bn] = {k: self._snap(st[k]) for k in keys}
-        self.bias_store[name] = {b: self._snap(mods[b].bias) for b in self._bias_names}
-        self.attnb_store[name] = {a: self._snap(mods[a].attention_biases)
-                                  for a in self._attn_names}
-        if self.store_half:
+            self.bn_store[name][bn] = {
+                k: enc(st[k], self.bn_store[prev][bn][k] if onebit else None,
+                       is_stat=k in ('running_mean', 'running_var'))
+                for k in keys}
+        self.bias_store[name] = {
+            b: enc(mods[b].bias, self.bias_store[prev][b] if onebit else None)
+            for b in self._bias_names}
+        self.attnb_store[name] = {
+            a: enc(mods[a].attention_biases,
+                   self.attnb_store[prev][a] if onebit else None)
+            for a in self._attn_names}
+        self.store_priced_bytes[name] = priced
+        if self.store_mode != 'fp32':
             # round-trip immediately: the live model must equal the store, so
             # the reference logits captured right after this task are already
-            # the fp16-quantized function (drift instruments stay exact)
+            # the quantized function (drift instruments stay exact)
             self.load_bn(name)
 
     @torch.no_grad()

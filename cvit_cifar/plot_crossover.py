@@ -32,6 +32,14 @@ SERIES_FP16 = [
     ('LoRA r=2 fp16', 'cvit_lora_pair50_S_128_r2_fp16_seed1.txt',  '#eda100', (0, (4, 2))),
 ]
 
+# BitDelta-style 1-bit-floor arms (store_quant.py), overlaid with --1bit as
+# dotted curves; the -factors curve is the "compressions don't stack" ablation
+SERIES_1BIT = [
+    ('CPG 1bit',        'cvit_cpg_pair50_S_128_1bit_seed1.txt',             '#2a78d6', (0, (1, 1.5))),
+    ('LoRA r=2 1bit',   'cvit_lora_pair50_S_128_r2_1bit_seed1.txt',         '#eda100', (0, (1, 1.5))),
+    ('LoRA 1bit-fact.', 'cvit_lora_pair50_S_128_r2_1bitfactors_seed1.txt',  '#c25757', (0, (1, 1.5))),
+]
+
 INK, MUTED, GRID, BASE, SURFACE = '#0b0b0b', '#898781', '#e1e0d9', '#c3c2b7', '#fcfcfb'
 
 
@@ -87,9 +95,11 @@ def main():
     ap.add_argument('--out', default='crossover_figure')
     ap.add_argument('--fp16', action='store_true',
                     help='overlay the matched-precision fp16 arms (Section 9.9) as dashed curves')
+    ap.add_argument('--1bit', dest='onebit', action='store_true',
+                    help='overlay the BitDelta-style 1-bit-floor arms as dotted curves')
     args = ap.parse_args()
 
-    series = SERIES + (SERIES_FP16 if args.fp16 else [])
+    series = SERIES + (SERIES_FP16 if args.fp16 else []) + (SERIES_1BIT if args.onebit else [])
     data = []
     for label, fname, color, ls in series:
         ks, accs, mbs = parse_cumulative(os.path.join(HERE, fname))

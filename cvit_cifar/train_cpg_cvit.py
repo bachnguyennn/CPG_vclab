@@ -68,8 +68,13 @@ def cpg_storage_bytes(model, masks, k):
     b = n_w * 4                                       # shared masked backbone
     b += n_w * math.ceil(math.log2(k + 1)) / 8        # ownership mask
     b += (k - 1) * n_w / 8                            # binarized piggymasks
-    for store in (model.bn_store, model.bias_store, model.attnb_store):
-        b += _store_bytes(store)
+    if getattr(model, 'store_mode', 'fp32') == '1bit':
+        # stores hold dequantized fp32 tensors; deployable size is the 1-bit
+        # sign+scale encoding priced at save time (store_quant.py)
+        b += sum(model.store_priced_bytes.values())
+    else:
+        for store in (model.bn_store, model.bias_store, model.attnb_store):
+            b += _store_bytes(store)
     if getattr(model, 'bn_mode', 'pertask') == 'shared-stats':
         b += model.shared_bn_stats_bytes()            # one shared copy
     b += sum(p.numel() for h in model.heads for p in h.parameters()) * 4
@@ -246,6 +251,9 @@ def main():
                     help='shared-stats: freeze BN running statistics at task-1 values; store only affine per task')
     ap.add_argument('--store-fp16', action='store_true',
                     help='keep per-task BN/bias/attention-bias stores in fp16 (quantized at save time)')
+    ap.add_argument('--store-1bit', action='store_true',
+                    help='BitDelta-style per-task stores: 1-bit sign + fp16 per-tensor scale, '
+                         'chained against the previous task (task 1 = fp16 base); see store_quant.py')
     ap.add_argument('--lr', type=float, default=1e-3)
     ap.add_argument('--lr-mask', type=float, default=5e-4)
     ap.add_argument('--workers', type=int, default=4)
@@ -270,13 +278,17 @@ def main():
     torch.backends.cudnn.benchmark = False
     torch.backends.cudnn.deterministic = True
 
+    assert not (args.store_fp16 and args.store_1bit), 'pick one store precision'
+    assert not (args.store_1bit and args.bn_mode == 'shared-stats'), \
+        '1bit stores chain full per-task BN state; use bn-mode=pertask'
+    store_mode = '1bit' if args.store_1bit else ('fp16' if args.store_fp16 else 'fp32')
     if args.grow_at or args.grow_when_free:
-        assert args.bn_mode == 'pertask' and not args.store_fp16, \
+        assert args.bn_mode == 'pertask' and store_mode == 'fp32', \
             'unit growth pads the per-task stores and expects full fp32 state dicts'
 
     model = SharableCViT(variant=args.variant, width_mult=args.width_mult,
                          img_size=args.img_size, bn_mode=args.bn_mode,
-                         store_half=args.store_fp16).to(DEVICE)
+                         store_mode=store_mode).to(DEVICE)
     if args.pretrained:
         from pretrained_init import load_pretrained
         from model_cifar import CKPT
@@ -401,8 +413,8 @@ def main():
         with open(args.results_file, 'w') as f:
             f.write('{} : {} tasks\n'.format(tag, len(tasks)))
             if not args.control:
-                f.write('config: bn-mode={} store-fp16={} adaptive-sparsity={}{}\n'.format(
-                    args.bn_mode, args.store_fp16, args.adaptive_sparsity,
+                f.write('config: bn-mode={} store-mode={} adaptive-sparsity={}{}\n'.format(
+                    args.bn_mode, store_mode, args.adaptive_sparsity,
                     ' levels={} goal-drop={}'.format(args.sparsity_levels, args.goal_drop)
                     if args.adaptive_sparsity else ''))
             if not args.control and grew_at:

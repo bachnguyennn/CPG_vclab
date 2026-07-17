@@ -26,6 +26,7 @@ sys.path.insert(0, _CVIT)
 from model.cascadedvit import BN_Linear  # noqa: E402
 
 from model_cifar import build_cvit_cifar, build_cvit_hires, CKPT
+from store_quant import sign_scale, sign_scale_grouped, priced_bytes_1bit
 
 
 class LoRAConv2d(nn.Module):
@@ -70,15 +71,23 @@ def wrap_all_convs(root, r, alpha):
 
 class LoRACViT(nn.Module):
     def __init__(self, variant='S', img_size=128, r=8, alpha=16.0, pretrained=True,
-                 store_half=False):
+                 store_mode='fp32'):
         super().__init__()
         self.variant, self.img_size, self.r = variant, img_size, r
-        # store_half: per-task saved state (LoRA A/B + BN + biases + attention
-        # biases) kept in fp16 — the symmetric treatment to CPG's --store-fp16.
-        # Heads stay fp32 on both sides. Evaluation always restores from the
-        # store, so reference logits reflect the quantized state and the
-        # logit-identity instrument stays exact.
-        self.store_half = store_half
+        # store_mode 'fp16': per-task saved state (LoRA A/B + BN + biases +
+        # attention biases) kept in fp16 — the symmetric treatment to CPG's
+        # --store-fp16. '1bit': BitDelta-style sign+scale on the per-task
+        # FLOOR (BN affine / conv biases / attn-bias tables, encoded against
+        # the fp16-rounded pristine snapshot); LoRA A/B stay fp16 — 1-bit
+        # factors cost ~5 pts (3-task smoke: 85.7% vs 91.0%) because rank-2
+        # is already the compressed representation. '1bit-factors': the
+        # ablation arm that also 1-bits A/B (one scale per rank component).
+        # See store_quant.py. Heads stay fp32 on both sides in every mode.
+        # Evaluation always restores from the store, so reference logits
+        # reflect the quantized state and the logit-identity instrument
+        # stays exact.
+        assert store_mode in ('fp32', 'fp16', '1bit', '1bit-factors')
+        self.store_mode = store_mode
         if img_size == 32:
             base = build_cvit_cifar(variant, num_classes=0)
         else:
@@ -121,15 +130,28 @@ class LoRACViT(nn.Module):
         self._bias_names = [n_ for n_ in self._lora_names if mods[n_].conv.bias is not None]
         self._attnb_names = [n_ for n_, p in self.named_parameters() if 'attention_biases' in n_]
         self.task_store = {}
+        self._priced = 0.0   # per-save deployable-bytes accumulator (see _snap)
         # pristine (post-pretrained-init) snapshot: each task starts from here,
         # so tasks are fully independent (order-invariant baseline)
         self._pristine = self._snapshot_shared()
 
     # ---- shared-state snapshot/restore (BN + conv biases + attention biases) ----
-    def _snap(self, t, quantize):
+    def _snap(self, t, quantize, ref=None, is_stat=False):
         t = t.detach().clone()
-        if quantize and self.store_half and t.is_floating_point():
+        if not (quantize and t.is_floating_point()):
+            return t
+        if self.store_mode in ('1bit', '1bit-factors') and not is_stat:
+            # encode against the fp16-rounded pristine value: the deployed
+            # decoder holds the pristine reference in fp16 (priced once via
+            # pristine_ref_bytes), so the encode ref must match it exactly
+            self._priced += priced_bytes_1bit(t)
+            return sign_scale(t, ref.to(t.device).half().float())
+        # fp16 store; also the BN running statistics in 1bit modes — stats
+        # are measurements, not trained deltas, and a per-tensor sign+scale
+        # collapses them (tasks drop to chance; fp16-stats/1bit-params split)
+        if self.store_mode != 'fp32':
             t = t.half()
+        self._priced += t.numel() * t.element_size()
         return t
 
     def _snapshot_shared(self, quantize=False):
@@ -137,11 +159,19 @@ class LoRACViT(nn.Module):
         True for the per-task store (that is the deployable state being priced)."""
         mods = dict(self.named_modules())
         params = dict(self.named_parameters())
+        pris = getattr(self, '_pristine', None)
         return {
-            'bn': {n_: {k: self._snap(v, quantize) for k, v in mods[n_].state_dict().items()}
+            'bn': {n_: {k: self._snap(v, quantize,
+                                      ref=pris['bn'][n_][k] if quantize else None,
+                                      is_stat=k in ('running_mean', 'running_var'))
+                        for k, v in mods[n_].state_dict().items()}
                    for n_ in self._bn_names},
-            'bias': {n_: self._snap(mods[n_].conv.bias, quantize) for n_ in self._bias_names},
-            'attnb': {n_: self._snap(params[n_], quantize) for n_ in self._attnb_names},
+            'bias': {n_: self._snap(mods[n_].conv.bias, quantize,
+                                    ref=pris['bias'][n_] if quantize else None)
+                     for n_ in self._bias_names},
+            'attnb': {n_: self._snap(params[n_], quantize,
+                                     ref=pris['attnb'][n_] if quantize else None)
+                      for n_ in self._attnb_names},
         }
 
     def _restore_shared(self, snap):
@@ -170,10 +200,35 @@ class LoRACViT(nn.Module):
 
     def save_task(self, name):
         mods = dict(self.named_modules())
+        self._priced = 0.0
         st = self._snapshot_shared(quantize=True)
-        st['lora'] = {n_: (self._snap(mods[n_].lora_A, True), self._snap(mods[n_].lora_B, True))
-                      for n_ in self._lora_names}
+        if self.store_mode == '1bit-factors':
+            # ablation arm: also 1-bit the A/B factors (encoded vs zero, one
+            # scale per rank component). Costs ~5 pts at smoke scale — the
+            # factors are already the compressed representation.
+            def enc(t, dim):
+                self._priced += priced_bytes_1bit(t, groups=t.shape[dim])
+                return sign_scale_grouped(t, dim)
+            st['lora'] = {n_: (enc(mods[n_].lora_A, 0), enc(mods[n_].lora_B, 1))
+                          for n_ in self._lora_names}
+        else:
+            # is_stat=True routes the factors to the fp16 path in '1bit'
+            # mode: the floor compresses to 1 bit for free, the factors
+            # don't (see class docstring)
+            st['lora'] = {n_: (self._snap(mods[n_].lora_A, True, is_stat=True),
+                               self._snap(mods[n_].lora_B, True, is_stat=True))
+                          for n_ in self._lora_names}
+        st['_priced'] = self._priced   # deployable bytes under store_mode's encoding
         self.task_store[name] = st
+
+    def pristine_ref_bytes(self):
+        """One-off fp16 copy of the pristine BN/bias/attn-bias state that a
+        deployed 1-bit decoder needs as its shared reference."""
+        n = sum(v.numel() for bn in self._pristine['bn'].values()
+                for k, v in bn.items() if v.is_floating_point())
+        n += sum(v.numel() for v in self._pristine['bias'].values())
+        n += sum(v.numel() for v in self._pristine['attnb'].values())
+        return n * 2
 
     def load_task(self, name):
         self.active = self.datasets.index(name)
