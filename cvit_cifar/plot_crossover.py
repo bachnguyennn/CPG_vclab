@@ -68,7 +68,7 @@ def end_labels(ax, ends):
     """Direct labels at line ends, nudged apart if they collide.
     ends: list of (x, y, label). Nudges in y only."""
     lo, hi = ax.get_ylim()
-    min_gap = (hi - lo) * 0.045
+    min_gap = (hi - lo) * 0.065
     ends = sorted(ends, key=lambda e: e[1])
     ys = [e[1] for e in ends]
     for i in range(1, len(ys)):
@@ -76,7 +76,7 @@ def end_labels(ax, ends):
             ys[i] = ys[i - 1] + min_gap
     for (x, _, label), y in zip(ends, ys):
         ax.annotate(label, (x, y), xytext=(5, 0), textcoords='offset points',
-                    va='center', fontsize=9, color=INK)
+                    va='center', fontsize=8.5, color=INK)
 
 
 def style_axis(ax):
@@ -105,7 +105,7 @@ def main():
         ks, accs, mbs = parse_cumulative(os.path.join(HERE, fname))
         data.append((label, color, ls, ks, accs, mbs))
 
-    fig, (axA, axB) = plt.subplots(1, 2, figsize=(10, 4.2), dpi=150)
+    fig, (axA, axB) = plt.subplots(1, 2, figsize=(11.5, 4.6), dpi=150)
     fig.patch.set_facecolor(SURFACE)
 
     # Panel A: storage vs tasks learned
@@ -148,9 +148,9 @@ def main():
     end_labels(axB, [(mbs[-1], accs[-1], label) for label, color, ls, ks, accs, mbs in data])
     axB.set_xlabel('total deployable storage (MB)', color=MUTED, fontsize=10)
     axB.set_ylabel('avg retained accuracy over seen tasks (%)', color=MUTED, fontsize=10)
-    axB.set_title('B. Accuracy per storage budget (curves traced by k)',
+    axB.set_title('B. Accuracy per storage budget\n(curves traced by k)',
                   color=INK, fontsize=11, loc='left')
-    axB.set_xmargin(0.18)
+    axB.set_xmargin(0.28)
 
     handles = [plt.Line2D([], [], color=c, linewidth=2, linestyle=ls, label=l)
                for l, c, ls, *_ in data]
@@ -158,7 +158,7 @@ def main():
                frameon=False, labelcolor=INK)
 
     fig.suptitle('Exact-zero-forgetting mechanisms on CViT-S@128: 50-task CIFAR-100 (2 classes/task)',
-                 color=INK, fontsize=11, x=0.02, ha='left')
+                 color=INK, fontsize=10.5, x=0.02, ha='left')
     fig.tight_layout(rect=(0, 0, 1, 0.94))
     for ext in ('png', 'pdf'):
         fig.savefig(os.path.join(HERE, args.out + '.' + ext), facecolor=SURFACE)

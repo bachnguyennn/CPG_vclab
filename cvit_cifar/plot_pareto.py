@@ -1,9 +1,10 @@
 """Figure: CViT-CPG accuracy vs inference compute Pareto (20-task CIFAR-100).
 
-All points: exact zero forgetting (frozen-weight drift 0.00e+00), identical
-CPG recipe. Log-x GFLOPs, retained accuracy on y. Two CViT series (32px
-partial-transfer family, 128px full-transfer headline points) vs the VGG16
-references. Output: pareto_figure.png (300 dpi) + .pdf for the paper.
+All points have frozen-weight drift 0.00e+00; the @128 headline CPG and LoRA
+points are post-attention-bias-fix exact-zero-forgetting runs. Log-x GFLOPs,
+retained accuracy on y. Two CViT series (32px partial-transfer family, 128px
+full-transfer headline points) vs the VGG16 references. Output:
+pareto_figure.png (300 dpi) + .pdf for the paper.
 """
 import matplotlib
 matplotlib.use('Agg')
@@ -68,8 +69,8 @@ ax.get_xaxis().set_minor_formatter(matplotlib.ticker.NullFormatter())
 ax.set_xlim(0.015, 1.1)
 ax.set_xlabel('Inference compute (GFLOPs, log scale)')
 ax.set_ylabel('Avg retained accuracy after 20 tasks (%)')
-ax.set_title('Zero-forgetting continual learning: accuracy vs compute\n'
-             '(20-task CIFAR-100, all points bit-exact zero forgetting)', fontsize=10.5)
+ax.set_title('Continual learning accuracy vs inference compute\n'
+             '(20-task CIFAR-100; @128 CPG/LoRA points are bit-exact zero forgetting)', fontsize=10.5)
 ax.set_ylim(69, 86.5)
 ax.grid(True, which='both', alpha=0.25)
 ax.legend(loc='lower right', fontsize=8.5, framealpha=0.9)

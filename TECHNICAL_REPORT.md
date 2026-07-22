@@ -61,33 +61,33 @@ The standard CPG Experiment-1 protocol: CIFAR-100's 100 fine classes are grouped
 
 ### 3.1 Phase A1: VGG16-CPG reproduction
 
-We reproduced the paper's Experiment 1 with the official code (`official_CPG/`), VGG16 with network width multiplier 1.5, driven by a Windows-native Python driver `run_experiment1.py` (the released bash scripts are not usable on Windows). Full per-task results:
+We reproduced the paper's Experiment 1 with the official code (`official_CPG/`), VGG16 with network width multiplier 1.5, driven by a Windows-native Python driver `run_experiment1.py` (the released bash scripts are not usable on Windows). The paper comparison below uses the CPG paper's `CPG max` row, the row with the reported 81.2 % average:
 
 | # | Task | Ours (%) | Paper (%) | Diff |
 |---|------|:---:|:---:|:---:|
-| 1 | aquatic_mammals | 63.00 | 65.2 | -2.20 |
-| 2 | fish | 76.60 | 76.6 | +0.00 |
-| 3 | flowers | 78.20 | 79.8 | -1.60 |
-| 4 | food_containers | 79.00 | 81.4 | -2.40 |
-| 5 | fruit_and_vegetables | 85.60 | 86.6 | -1.00 |
-| 6 | household_electrical_devices | 81.40 | 84.8 | -3.40 |
-| 7 | household_furniture | 80.80 | 83.4 | -2.60 |
-| 8 | insects | 82.00 | 85.0 | -3.00 |
-| 9 | large_carnivores | 84.00 | 84.2 | -0.20 |
-| 10 | large_man-made_outdoor_things | 87.00 | 89.2 | -2.20 |
-| 11 | large_natural_outdoor_scenes | 87.00 | 90.8 | -3.80 |
-| 12 | large_omnivores_and_herbivores | 80.20 | 82.4 | -2.20 |
-| 13 | medium_mammals | 85.80 | 85.6 | +0.20 |
-| 14 | non-insect_invertebrates | 82.40 | 85.2 | -2.80 |
-| 15 | people | 50.60 | 53.2 | -2.60 |
-| 16 | reptiles | 69.80 | 84.4 | -14.60 |
-| 17 | small_mammals | 70.60 | 70.0 | +0.60 |
-| 18 | trees | 70.40 | 73.4 | -3.00 |
-| 19 | vehicles_1 | 85.20 | 88.8 | -3.60 |
-| 20 | vehicles_2 | 92.60 | 94.8 | -2.20 |
-| | **Average** | **78.61** | **81.2** | **-2.63** |
+| 1 | aquatic_mammals | 63.00 | 67.0 | -4.00 |
+| 2 | fish | 76.60 | 79.2 | -2.60 |
+| 3 | flowers | 78.20 | 77.2 | +1.00 |
+| 4 | food_containers | 79.00 | 82.0 | -3.00 |
+| 5 | fruit_and_vegetables | 85.60 | 86.8 | -1.20 |
+| 6 | household_electrical_devices | 81.40 | 87.2 | -5.80 |
+| 7 | household_furniture | 80.80 | 82.0 | -1.20 |
+| 8 | insects | 82.00 | 85.6 | -3.60 |
+| 9 | large_carnivores | 84.00 | 86.4 | -2.40 |
+| 10 | large_man-made_outdoor_things | 87.00 | 89.6 | -2.60 |
+| 11 | large_natural_outdoor_scenes | 87.00 | 90.0 | -3.00 |
+| 12 | large_omnivores_and_herbivores | 80.20 | 84.0 | -3.80 |
+| 13 | medium_mammals | 85.80 | 87.2 | -1.40 |
+| 14 | non-insect_invertebrates | 82.40 | 84.8 | -2.40 |
+| 15 | people | 50.60 | 55.4 | -4.80 |
+| 16 | reptiles | 69.80 | 73.8 | -4.00 |
+| 17 | small_mammals | 70.60 | 72.0 | -1.40 |
+| 18 | trees | 70.40 | 71.6 | -1.20 |
+| 19 | vehicles_1 | 85.20 | 89.6 | -4.40 |
+| 20 | vehicles_2 | 92.60 | 92.8 | -0.20 |
+| | **Average** | **78.61** | **81.2** | **-2.60** |
 
-The -2.6 pt average gap is consistent with reproducing without the paper's per-task hyperparameter search; 18 of 20 tasks are within ~4 pts. The single outlier (reptiles, -14.6) traces to a weak from-scratch baseline accuracy for that task in our run, which CPG's accuracy-goal mechanism uses as its training target. **78.61 % / 0.7467 GFLOPs is the reference point for all efficiency comparisons below.**
+The -2.6 pt average gap is consistent with reproducing without the paper's per-task hyperparameter search; 17 of 20 tasks are within 4 pts, and the largest gaps are household_electrical_devices (-5.8), people (-4.8), and vehicles_1 (-4.4). **78.61 % / 0.7467 GFLOPs is the reference point for all efficiency comparisons below.**
 
 ### 3.2 Phase A2: adapting CViT to CIFAR-100
 
@@ -350,6 +350,8 @@ Findings:
 4. **cAPF falls monotonically with size**, so CViT-S is the operating point when compute/energy is the constraint and CViT-XL when accuracy is.
 5. Hard tasks are hard for everyone: people (40–47 %) and small_mammals (60–63 %) are the weakest tasks for every variant and for VGG (50.6 / 70.6), i.e., the deficit is task intrinsic (fine-grained, high intra-class variation), not backbone-specific.
 
+![Accuracy-vs-compute Pareto frontier for CViT-CPG, VGG16-CPG, and LoRA baselines.](cvit_cifar/pareto_figure.png){width=100%}
+
 ### 9.5 Latency and energy (measured, RTX 3060, batch 128, 32x32)
 
 Method (`measure_latency_energy.py`): sustained inference loop, 30 warmup + 200 timed iterations at batch 128, CUDA-event timing; GPU power sampled via `nvidia-smi --query-gpu=power.draw` every 20 iterations during the loop; energy per image = mean power x latency per image.
@@ -416,6 +418,8 @@ Findings (reported with full candor — the baseline wins on accuracy):
 
 Section 9.7's finding 3 leaves masks one open escape: since piggymasks cost ~1 bit/weight/task while LoRA adapters are fp32, a long enough task sequence should reach a storage budget at which CPG overtakes. This is tested directly on a **50-task split** of CIFAR-100 (2 fine classes per task, deterministic seeded pairing — `pair50` in `task_data.py`), CViT-S@128 pretrained, recipe identical to every headline run (29 total epochs/task, deterministic eval), seed 1. Storage is *measured* deployable state after every task k: fp32 backbone + mechanism state (ownership mask at ceil(log2(k+1)) bits/weight + one binarized piggymask per task, vs. saved LoRA adapters) + the per-task fp32 state both mechanisms need (BatchNorm, conv biases, attention-bias tables, head). Both drivers now emit the cumulative accuracy/storage curve; figure: `cvit_cifar/crossover50_figure.png/.pdf`.
 
+![50-task storage-crossover curve for CPG masks and per-task LoRA.](cvit_cifar/crossover50_figure.png){width=100%}
+
 | Method (S@128, 50 tasks) | Retained acc | Total storage | Late slope (MB/task) | BWT | Drift (wt / logit) |
 |---|:---:|:---:|:---:|:---:|:---:|
 | CPG masks | 95.46 % | 30.76 MB | 0.459 | +0.000 % | 0.00e+00 / 0.00e+00 |
@@ -474,6 +478,8 @@ Three findings close the thread:
 3. **The verdict is unchanged at the last rung — and becomes symmetric.** LoRA r=2 still Pareto-dominates CPG (96.54 % @ 16.0 MB vs 94.99 % @ 21.8 MB). With the shared floor compressed away on both sides, each mechanism faces its own irreducible core: CPG's binarized piggymasks (~0.21 MB/task, already bits) against LoRA's fp16 factors (~0.12 MB/task). The masks lose bits-vs-bits, on their own turf.
 
 Figure: `crossover50_1bit_figure.png/.pdf` (`plot_crossover.py --fp16 --1bit`, dotted = 1-bit arms). Write-up with the smoke-scale ablations: `CROSSOVER50.md`.
+
+![Matched-precision and 1-bit storage curves for the 50-task study.](cvit_cifar/crossover50_1bit_figure.png){width=100%}
 
 ### 9.10 Accuracy-goal compaction (adaptive sparsity)
 
