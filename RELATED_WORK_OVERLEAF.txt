@@ -1,0 +1,246 @@
+================================================================================
+ RELATED WORK + BIBLIOGRAPHY FOR OVERLEAF
+ Thesis: Zero-Forgetting Continual Learning on the CascadedViT Family (CViT-CPG)
+ Author: Vu Bach Nguyen (Ontario Tech University)
+================================================================================
+
+HOW TO USE THIS FILE
+--------------------
+1. Copy the "PART 1" block below into your main .tex file where you want the
+   Related Work section to appear.
+2. Copy the "PART 2" block into a file called references.bib in your Overleaf
+   project (or append it to your existing .bib file).
+3. Make sure your document loads a bibliography, e.g. near the end of main.tex:
+       \bibliographystyle{ieeetr}   % or plain / unsrt / abbrvnat
+       \bibliography{references}
+   (If you use biblatex instead, add \usepackage[backend=biber]{biblatex},
+    \addbibresource{references.bib}, and \printbibliography at the end.)
+
+Every work below is one that the thesis actually builds on, cites, or compares
+against. Grouped by the role it plays in the report.
+
+
+================================================================================
+ PART 1 — RELATED WORK SECTION (LaTeX prose, paste into main.tex)
+================================================================================
+
+\section{Related Work}
+\label{sec:related}
+
+\subsection{Mask-based continual learning without forgetting}
+Regularization-based continual learners such as elastic weight consolidation
+(EWC)~\cite{kirkpatrick2017ewc} penalize movement of important weights but only
+\emph{discourage} forgetting; a
+second family removes forgetting \emph{by construction} through parameter
+isolation. PackNet~\cite{mallya2018packnet} iteratively prunes a network and
+assigns the surviving weights to a task, freezing them permanently so later
+tasks cannot overwrite them. Piggyback~\cite{mallya2018piggyback} learns a
+binary mask over a fixed backbone per task, reusing frozen weights without
+modifying them. Compacting, Picking and Growing (CPG)~\cite{hung2019cpg} unifies
+these ideas: each task trains only free weights, \emph{picks} (read-only reuses)
+old weights through a learned binary ``piggymask,'' \emph{compacts} its own
+weights by gradual pruning, and \emph{grows} the network when the free pool is
+exhausted. Because forgetting is prevented by exact weight freezing, the
+guarantee is falsifiable at the bit level. This thesis takes CPG as its
+mechanism and ports it, unchanged, onto a modern hybrid vision transformer.
+
+\subsection{Efficient hybrid vision transformer backbones}
+EfficientViT~\cite{liu2023efficientvit} introduces a memory-efficient sandwich
+layout and \emph{cascaded group attention} (CGA), in which the token feature is
+split into per-head channel chunks and each head's output is cascaded into the
+next, cutting attention redundancy and FLOPs. CascadedViT
+(CViT)~\cite{sivakumar2025cascadedvit} extends this lineage with a cascaded
+chunk feed-forward network (CCFFN), reducing parameters by ${\sim}20\%$ and
+FLOPs by ${\sim}15\%$ over its EfficientViT backbone while targeting
+battery-constrained deployment. The contiguous-chunk routing in CGA and CCFFN is
+the central architectural fact of this work: it is what breaks naive
+width-based network growing and dictates the unit-granular growth axis we adopt.
+
+\subsection{Parameter-efficient per-task adaptation}
+As an alternative to weight-ownership masks, low-rank adaptation
+(LoRA)~\cite{hu2022lora} freezes the backbone and learns a low-rank update
+$\Delta W = BA$ per task. LoRA gives a naturally forgetting-free per-task
+adapter and serves as our primary baseline for the accuracy-versus-storage
+trade-off against CPG masks on the identical frozen backbone.
+
+\subsection{Compressing the per-task footprint}
+Both masks and adapters incur a per-task storage floor. BitDelta%
+~\cite{liu2024bitdelta} shows that the delta between a fine-tuned model and its
+base survives quantization to a single sign bit per weight plus one scale per
+tensor, on the premise that fine-tuning adds little information over the base.
+The per-task stores here have exactly that base-plus-small-delta structure, so
+we port the BitDelta treatment to compress the trained floor on both the CPG and
+LoRA arms.
+
+\subsection{Foundational components and benchmark}
+The reference reproduction uses the VGG-16 backbone~\cite{simonyan2015vgg} on
+which CPG was originally validated. The CViT backbone relies on batch
+normalization~\cite{ioffe2015batchnorm} and squeeze-and-excitation
+modules~\cite{hu2018senet}; the piggymask and BitDelta stores both use the
+straight-through estimator~\cite{bengio2013ste} to backpropagate through
+binarization/quantization. All continual-learning experiments follow the CPG
+Experiment-1 protocol on CIFAR-100~\cite{krizhevsky2009cifar} (the 100 fine
+classes grouped into 20 semantic-superclass tasks), with backbones optionally
+pretrained on ImageNet~\cite{deng2009imagenet}.
+
+
+================================================================================
+ PART 2 — references.bib (paste into references.bib in Overleaf)
+================================================================================
+
+@inproceedings{hung2019cpg,
+  title     = {Compacting, Picking and Growing for Unforgetting Continual Learning},
+  author    = {Hung, Ching-Yi and Tu, Cheng-Hao and Wu, Cheng-En and Chen, Chien-Hung and Chan, Yi-Ming and Chen, Chu-Song},
+  booktitle = {Advances in Neural Information Processing Systems (NeurIPS)},
+  year      = {2019},
+  eprint    = {1910.06562},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.LG}
+}
+
+@article{sivakumar2025cascadedvit,
+  title   = {CascadedViT: Cascaded Chunk-FeedForward and Cascaded Group Attention Vision Transformer},
+  author  = {Sivakumar, Srivathsan and Qureshi, Faisal Z.},
+  journal = {arXiv preprint arXiv:2511.14111},
+  year    = {2025},
+  eprint  = {2511.14111},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.CV},
+  note    = {Conference on Robots and Vision (CRV)}
+}
+
+@inproceedings{liu2023efficientvit,
+  title     = {EfficientViT: Memory Efficient Vision Transformer with Cascaded Group Attention},
+  author    = {Liu, Xinyu and Peng, Houwen and Zheng, Ningxin and Yang, Yuqing and Hu, Han and Yuan, Yixuan},
+  booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+  year      = {2023},
+  eprint    = {2305.07027},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.CV}
+}
+
+@inproceedings{hu2022lora,
+  title     = {LoRA: Low-Rank Adaptation of Large Language Models},
+  author    = {Hu, Edward J. and Shen, Yelong and Wallis, Phillip and Allen-Zhu, Zeyuan and Li, Yuanzhi and Wang, Shean and Wang, Lu and Chen, Weizhu},
+  booktitle = {International Conference on Learning Representations (ICLR)},
+  year      = {2022},
+  eprint    = {2106.09685},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.CL}
+}
+
+@inproceedings{liu2024bitdelta,
+  title     = {BitDelta: Your Fine-Tune May Only Be Worth One Bit},
+  author    = {Liu, James and Xiao, Guangxuan and Li, Kai and Lee, Jason D. and Han, Song and Kadavath, Saurav and Sharma, Pranav},
+  booktitle = {Advances in Neural Information Processing Systems (NeurIPS)},
+  year      = {2024},
+  eprint    = {2402.10193},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.LG}
+}
+
+@article{kirkpatrick2017ewc,
+  title   = {Overcoming Catastrophic Forgetting in Neural Networks},
+  author  = {Kirkpatrick, James and Pascanu, Razvan and Rabinowitz, Neil and Veness, Joel and Desjardins, Guillaume and Rusu, Andrei A. and Milan, Kieran and Quan, John and Ramalho, Tiago and Grabska-Barwinska, Agnieszka and Hassabis, Demis and Clopath, Claudia and Kumaran, Dharshan and Hadsell, Raia},
+  journal = {Proceedings of the National Academy of Sciences (PNAS)},
+  volume  = {114},
+  number  = {13},
+  pages   = {3521--3526},
+  year    = {2017},
+  eprint  = {1612.00796},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.LG}
+}
+
+@inproceedings{mallya2018packnet,
+  title     = {PackNet: Adding Multiple Tasks to a Single Network by Iterative Pruning},
+  author    = {Mallya, Arun and Lazebnik, Svetlana},
+  booktitle = {Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR)},
+  year      = {2018},
+  eprint    = {1711.05769},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.CV}
+}
+
+@inproceedings{mallya2018piggyback,
+  title     = {Piggyback: Adapting a Single Network to Multiple Tasks by Learning to Mask Weights},
+  author    = {Mallya, Arun and Davis, Dillon and Lazebnik, Svetlana},
+  booktitle = {Proceedings of the European Conference on Computer Vision (ECCV)},
+  year      = {2018},
+  eprint    = {1801.06519},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.CV}
+}
+
+@inproceedings{simonyan2015vgg,
+  title     = {Very Deep Convolutional Networks for Large-Scale Image Recognition},
+  author    = {Simonyan, Karen and Zisserman, Andrew},
+  booktitle = {International Conference on Learning Representations (ICLR)},
+  year      = {2015},
+  eprint    = {1409.1556},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.CV}
+}
+
+@inproceedings{hu2018senet,
+  title     = {Squeeze-and-Excitation Networks},
+  author    = {Hu, Jie and Shen, Li and Sun, Gang},
+  booktitle = {Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR)},
+  year      = {2018},
+  eprint    = {1709.01507},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.CV}
+}
+
+@inproceedings{ioffe2015batchnorm,
+  title     = {Batch Normalization: Accelerating Deep Network Training by Reducing Internal Covariate Shift},
+  author    = {Ioffe, Sergey and Szegedy, Christian},
+  booktitle = {International Conference on Machine Learning (ICML)},
+  year      = {2015},
+  eprint    = {1502.03167},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.LG}
+}
+
+@article{bengio2013ste,
+  title   = {Estimating or Propagating Gradients Through Stochastic Neurons for Conditional Computation},
+  author  = {Bengio, Yoshua and L{\'e}onard, Nicholas and Courville, Aaron},
+  journal = {arXiv preprint arXiv:1308.3432},
+  year    = {2013},
+  eprint  = {1308.3432},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.LG}
+}
+
+@techreport{krizhevsky2009cifar,
+  title       = {Learning Multiple Layers of Features from Tiny Images},
+  author      = {Krizhevsky, Alex},
+  institution = {University of Toronto},
+  year        = {2009}
+}
+
+@inproceedings{deng2009imagenet,
+  title     = {ImageNet: A Large-Scale Hierarchical Image Database},
+  author    = {Deng, Jia and Dong, Wei and Socher, Richard and Li, Li-Jia and Li, Kai and Fei-Fei, Li},
+  booktitle = {Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR)},
+  year      = {2009}
+}
+
+================================================================================
+ CITATION-KEY QUICK REFERENCE
+================================================================================
+ \cite{hung2019cpg}          CPG — the core method being ported
+ \cite{sivakumar2025cascadedvit}  CascadedViT — the target backbone
+ \cite{liu2023efficientvit}  EfficientViT — backbone lineage (CGA)
+ \cite{hu2022lora}           LoRA — low-rank per-task adapter baseline
+ \cite{liu2024bitdelta}      BitDelta — 1-bit per-task store compression
+ \cite{kirkpatrick2017ewc}   EWC — regularization-based CL contrast
+ \cite{mallya2018packnet}    PackNet — mask-based CL predecessor
+ \cite{mallya2018piggyback}  Piggyback — piggymask predecessor
+ \cite{simonyan2015vgg}      VGG-16 — reference reproduction backbone
+ \cite{hu2018senet}          Squeeze-and-Excitation modules
+ \cite{ioffe2015batchnorm}   Batch normalization
+ \cite{bengio2013ste}        Straight-through estimator
+ \cite{krizhevsky2009cifar}  CIFAR-100 benchmark
+ \cite{deng2009imagenet}     ImageNet pretraining
+================================================================================
