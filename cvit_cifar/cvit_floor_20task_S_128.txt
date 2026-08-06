@@ -1,0 +1,50 @@
+Floor-only control (no adapter: per-task BN/bias/attn-bias/head only) on frozen pretrained CViT-S@128 : 20 tasks, 29 epochs
+config: store-mode=fp32
+avg retained acc 77.62%  BWT +0.000%  frozen-weight-drift 0.00e+00  logit-drift 0.00e+00
+cAPF 3379.3 %/GFLOP (0.0230 GFLOPs merged)  adapter 0.063M params/task
+
+cumulative (storage-crossover curve): after task k, avg acc over tasks 1..k,
+deployable storage (fp32 backbone + all saved per-task state, measured)
+  k  avg_acc  storage_MB
+   1    65.80      6.986   aquatic_mammals
+   2    70.50      7.237   fish
+   3    72.27      7.488   flowers
+   4    73.95      7.740   food_containers
+   5    76.08      7.991   fruit_and_vegetables
+   6    77.60      8.242   household_electrical_devices
+   7    77.37      8.493   household_furniture
+   8    77.90      8.745   insects
+   9    78.24      8.996   large_carnivores
+  10    78.82      9.247   large_man-made_outdoor_things
+  11    79.35      9.498   large_natural_outdoor_scenes
+  12    79.33      9.750   large_omnivores_and_herbivores
+  13    79.42     10.001   medium_mammals
+  14    79.77     10.252   non-insect_invertebrates
+  15    77.63     10.503   people
+  16    77.53     10.754   reptiles
+  17    77.18     11.006   small_mammals
+  18    76.74     11.257   trees
+  19    77.07     11.508   vehicles_1
+  20    77.62     11.759   vehicles_2
+
+per-task retained accuracy (after all tasks):
+  aquatic_mammals                     65.8
+  fish                                75.2
+  flowers                             75.8
+  food_containers                     79.0
+  fruit_and_vegetables                84.6
+  household_electrical_devices        85.2
+  household_furniture                 76.0
+  insects                             81.6
+  large_carnivores                    81.0
+  large_man-made_outdoor_things       84.0
+  large_natural_outdoor_scenes        84.6
+  large_omnivores_and_herbivores      79.2
+  medium_mammals                      80.4
+  non-insect_invertebrates            84.4
+  people                              47.6
+  reptiles                            76.0
+  small_mammals                       71.6
+  trees                               69.4
+  vehicles_1                          83.0
+  vehicles_2                          88.0

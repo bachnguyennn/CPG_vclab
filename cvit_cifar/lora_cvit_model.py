@@ -35,23 +35,35 @@ class LoRAConv2d(nn.Module):
     A is (r, in/groups * kh * kw), B is (out, r) -- works for 1x1, kxk and
     depthwise convs alike. B starts at zero so the wrapped conv is exactly the
     base conv until trained.
+
+    r=0 carries no delta at all: the wrapper degenerates to its frozen conv,
+    which is the floor-only control (no adaptation mechanism, only the per-task
+    state every exact-guarantee method on this backbone must store anyway).
     """
 
     def __init__(self, conv, r=8, alpha=16.0):
         super().__init__()
         self.conv = conv
         fan_in = (conv.in_channels // conv.groups) * conv.kernel_size[0] * conv.kernel_size[1]
-        self.r = min(r, fan_in, conv.out_channels)
+        self.r = 0 if r <= 0 else min(r, fan_in, conv.out_channels)
+        if self.r == 0:
+            self.scale = 0.0
+            self.lora_A = self.lora_B = None
+            return
         self.scale = alpha / self.r
         self.lora_A = nn.Parameter(torch.empty(self.r, fan_in))
         self.lora_B = nn.Parameter(torch.zeros(conv.out_channels, self.r))
         self.reset_lora()
 
     def reset_lora(self):
+        if self.r == 0:
+            return
         nn.init.kaiming_uniform_(self.lora_A, a=5 ** 0.5)
         nn.init.zeros_(self.lora_B)
 
     def forward(self, x):
+        if self.r == 0:
+            return self.conv(x)
         w = self.conv.weight + (self.lora_B @ self.lora_A).view_as(self.conv.weight) * self.scale
         return F.conv2d(x, w, self.conv.bias, self.conv.stride,
                         self.conv.padding, self.conv.dilation, self.conv.groups)
@@ -107,8 +119,9 @@ class LoRACViT(nn.Module):
             p.requires_grad_(False)
         for m in self.modules():
             if isinstance(m, LoRAConv2d):
-                m.lora_A.requires_grad_(True)
-                m.lora_B.requires_grad_(True)
+                if m.r > 0:
+                    m.lora_A.requires_grad_(True)
+                    m.lora_B.requires_grad_(True)
                 if m.conv.bias is not None:
                     m.conv.bias.requires_grad_(True)
             elif isinstance(m, (nn.BatchNorm2d, nn.BatchNorm1d)):
@@ -202,7 +215,9 @@ class LoRACViT(nn.Module):
         mods = dict(self.named_modules())
         self._priced = 0.0
         st = self._snapshot_shared(quantize=True)
-        if self.store_mode == '1bit-factors':
+        if self.r <= 0:
+            st['lora'] = {}          # floor-only control: no adapter to store
+        elif self.store_mode == '1bit-factors':
             # ablation arm: also 1-bit the A/B factors (encoded vs zero, one
             # scale per rank component). Costs ~5 pts at smoke scale — the
             # factors are already the compressed representation.
@@ -249,7 +264,8 @@ class LoRACViT(nn.Module):
     def per_task_param_count(self):
         """Parameters stored per task (adapter cost), incl. BN running stats."""
         mods = dict(self.named_modules())
-        n = sum(mods[l].lora_A.numel() + mods[l].lora_B.numel() for l in self._lora_names)
+        n = 0 if self.r <= 0 else sum(
+            mods[l].lora_A.numel() + mods[l].lora_B.numel() for l in self._lora_names)
         n += sum(v.numel() for bn in self._pristine['bn'].values()
                  for k, v in bn.items() if k != 'num_batches_tracked')
         n += sum(v.numel() for v in self._pristine['bias'].values())

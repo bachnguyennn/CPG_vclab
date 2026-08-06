@@ -270,6 +270,9 @@ def main():
     ap.add_argument('--grow-quanta', type=int, default=1,
                     help='quanta per growth event (+ed0/2 ch, +nh0/2 heads, +1 CFFN chunk per stage)')
     ap.add_argument('--seed', type=int, default=1)
+    ap.add_argument('--order-seed', type=int, default=0,
+                    help='0 = fixed published task order (all headline runs); nonzero = '
+                         'deterministic shuffle, for the order-dependence ablation')
     ap.add_argument('--results-file', type=str, default='')
     args = ap.parse_args()
 
@@ -301,7 +304,9 @@ def main():
     cumrows = []   # (k, task, avg acc over seen, storage MB, free-weight frac)
     tag = 'CONTROL (fine-tune)' if args.control else 'CViT-CPG'
 
-    tasks = get_tasks(args.split)[:args.tasks]
+    tasks = get_tasks(args.split, args.order_seed)[:args.tasks]
+    if args.order_seed:
+        print('task order (order-seed {}): {}'.format(args.order_seed, ', '.join(tasks)), flush=True)
     grew_at = 0
     for k, task in enumerate(tasks, start=1):
         # ---- CPG GROWING (unit-granular): fire BEFORE the task's head exists ----
@@ -412,6 +417,9 @@ def main():
     if args.results_file:
         with open(args.results_file, 'w') as f:
             f.write('{} : {} tasks\n'.format(tag, len(tasks)))
+            f.write('task order: {}\n'.format(
+                'fixed (published CPG order)' if not args.order_seed
+                else 'shuffled, order-seed {} -> {}'.format(args.order_seed, ', '.join(tasks))))
             if not args.control:
                 f.write('config: bn-mode={} store-mode={} adaptive-sparsity={}{}\n'.format(
                     args.bn_mode, store_mode, args.adaptive_sparsity,

@@ -1,0 +1,25 @@
+Linear probe on frozen pretrained CViT-S@128 : 20 tasks, 50 head-fit epochs
+protocol: canonical un-augmented cached features, per-task fresh nn.Linear(192,5), task-incremental (ID known)
+avg accuracy 69.51%  BWT +0.000% (structural)  frozen-backbone drift 0.00e+00
+
+per-task accuracy:
+  aquatic_mammals                     56.8
+  fish                                67.0
+  flowers                             69.2
+  food_containers                     76.0
+  fruit_and_vegetables                78.6
+  household_electrical_devices        84.4
+  household_furniture                 69.4
+  insects                             72.8
+  large_carnivores                    70.8
+  large_man-made_outdoor_things       79.4
+  large_natural_outdoor_scenes        74.0
+  large_omnivores_and_herbivores      75.0
+  medium_mammals                      73.4
+  non-insect_invertebrates            72.6
+  people                              41.2
+  reptiles                            66.6
+  small_mammals                       57.4
+  trees                               56.4
+  vehicles_1                          66.6
+  vehicles_2                          82.6

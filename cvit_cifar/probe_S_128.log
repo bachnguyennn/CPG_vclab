@@ -1,0 +1,29 @@
+device: cuda  |  cached un-augmented probe  |  backbone: CViT-S@128  pretrained=True
+pretrained init: loaded 831 tensors (1.75M params, 102% of model, 5 attn-bias interpolated), skipped 19
+  skipped by category: {'attn_bias': 5, 'head': 14}
+  [ 1/20] aquatic_mammals                     acc 56.8
+  [ 2/20] fish                                acc 67.0
+  [ 3/20] flowers                             acc 69.2
+  [ 4/20] food_containers                     acc 76.0
+  [ 5/20] fruit_and_vegetables                acc 78.6
+  [ 6/20] household_electrical_devices        acc 84.4
+  [ 7/20] household_furniture                 acc 69.4
+  [ 8/20] insects                             acc 72.8
+  [ 9/20] large_carnivores                    acc 70.8
+  [10/20] large_man-made_outdoor_things       acc 79.4
+  [11/20] large_natural_outdoor_scenes        acc 74.0
+  [12/20] large_omnivores_and_herbivores      acc 75.0
+  [13/20] medium_mammals                      acc 73.4
+  [14/20] non-insect_invertebrates            acc 72.6
+  [15/20] people                              acc 41.2
+  [16/20] reptiles                            acc 66.6
+  [17/20] small_mammals                       acc 57.4
+  [18/20] trees                               acc 56.4
+  [19/20] vehicles_1                          acc 66.6
+  [20/20] vehicles_2                          acc 82.6
+
+======================================================================
+Linear probe (frozen CViT-S@128) : 20 tasks, 50 head-fit epochs
+avg accuracy 69.51%   BWT +0.000% (structural)   frozen-backbone drift 0.00e+00
+======================================================================
+wrote cvit_probe_20task_S_128.txt

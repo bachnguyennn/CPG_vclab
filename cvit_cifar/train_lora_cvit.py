@@ -82,7 +82,9 @@ def main():
                     help='per-task epochs (CPG runs use 25 finetune + 4 prune = 29 total)')
     ap.add_argument('--lr', type=float, default=1e-3)
     ap.add_argument('--wd', type=float, default=4e-5)
-    ap.add_argument('--rank', type=int, default=8)
+    ap.add_argument('--rank', type=int, default=8,
+                    help='LoRA rank; 0 = floor-only control (no adapter, only the per-task '
+                         'BN/bias/attn-bias/head state both mechanisms must store anyway)')
     ap.add_argument('--alpha', type=float, default=16.0)
     ap.add_argument('--workers', type=int, default=4)
     ap.add_argument('--variant', type=str, default='S', choices=['S', 'M', 'L', 'XL'])
@@ -97,6 +99,11 @@ def main():
                     help='ablation: --store-1bit that also 1-bits the LoRA A/B factors '
                          '(one fp16 scale per rank component, encoded vs zero)')
     ap.add_argument('--seed', type=int, default=1)
+    ap.add_argument('--order-seed', type=int, default=0,
+                    help='0 = fixed published task order; nonzero = deterministic shuffle. '
+                         'This arm is order-invariant by construction (each task re-derives its '
+                         'state from the pristine backbone), so it is the null control for the '
+                         'CPG order ablation')
     ap.add_argument('--results-file', type=str, default='')
     args = ap.parse_args()
 
@@ -106,6 +113,9 @@ def main():
 
     assert sum([args.store_fp16, args.store_1bit, args.store_1bit_factors]) <= 1, \
         'pick one store precision'
+    assert not (args.rank <= 0 and args.store_1bit_factors), \
+        '--store-1bit-factors is meaningless at rank 0 (no factors to quantize)'
+    arm = 'floor' if args.rank <= 0 else 'LoRA-r{}'.format(args.rank)
     store_mode = ('1bit-factors' if args.store_1bit_factors else
                   '1bit' if args.store_1bit else
                   'fp16' if args.store_fp16 else 'fp32')
@@ -126,7 +136,9 @@ def main():
         backbone_bytes += model.pristine_ref_bytes()
     stored_bytes = 0
 
-    tasks = get_tasks(args.split)[:args.tasks]
+    tasks = get_tasks(args.split, args.order_seed)[:args.tasks]
+    if args.order_seed:
+        print('task order (order-seed {}): {}'.format(args.order_seed, ', '.join(tasks)), flush=True)
     for k, task in enumerate(tasks, start=1):
         model.add_task(task, num_classes(task))
         if per_task_params is None:
@@ -134,7 +146,7 @@ def main():
         train_loader, test_loader = get_task_loaders(task, batch_size=64, workers=args.workers,
                                                      img_size=args.img_size)
         test_loaders[task] = test_loader
-        print('\n=== [LoRA-r{}] TASK {}/{}: {} ==='.format(args.rank, k, len(tasks), task), flush=True)
+        print('\n=== [{}] TASK {}/{}: {} ==='.format(arm, k, len(tasks), task), flush=True)
         run_task(model, task, train_loader, args)
         weight_drift = max(weight_drift, abs(model.frozen_checksum() - frozen_ref))
 
@@ -152,7 +164,9 @@ def main():
 
     # ---- report (same layout as train_cpg_cvit.py) ----
     print('\n' + '=' * 74)
-    print('Per-task LoRA (rank {}) : per-task accuracy (col = after task N)'.format(args.rank))
+    print('{} : per-task accuracy (col = after task N)'.format(
+        'Floor-only control (no adapter)' if args.rank <= 0
+        else 'Per-task LoRA (rank {})'.format(args.rank)))
     print('=' * 74)
     print('task \\ after ' + ' '.join('{:>6d}'.format(k) for k in range(1, len(tasks) + 1)))
     acc_drift, bwt_terms = 0.0, []
@@ -189,15 +203,21 @@ def main():
     gflops, mparams = count(plain, size=args.img_size)
     capf = avg_retained / gflops
     print('\ninference (LoRA merged): {:.4f} GFLOPs, {:.2f}M backbone params'.format(gflops, mparams))
-    print('per-task adapter cost   : {:.3f}M params/task ({:.2f} MB {}-store measured), grows linearly with tasks'.format(
+    print('per-task {:8s} cost   : {:.3f}M params/task ({:.2f} MB {}-store measured), grows linearly with tasks'.format(
+        'floor' if args.rank <= 0 else 'adapter',
         per_task_params / 1e6, task_store_bytes(model, tasks[0]) / 1e6, store_mode))
     print('cAPF = {:.1f} %/GFLOP'.format(capf))
 
     if args.results_file:
         with open(args.results_file, 'w') as f:
-            f.write('Per-task LoRA rank {} on frozen pretrained CViT-{}@{} : {} tasks, {} epochs\n'.format(
-                args.rank, args.variant, args.img_size, len(tasks), args.epochs))
+            f.write('{} on frozen pretrained CViT-{}@{} : {} tasks, {} epochs\n'.format(
+                'Floor-only control (no adapter: per-task BN/bias/attn-bias/head only)'
+                if args.rank <= 0 else 'Per-task LoRA rank {}'.format(args.rank),
+                args.variant, args.img_size, len(tasks), args.epochs))
             f.write('config: store-mode={}\n'.format(store_mode))
+            f.write('task order: {}\n'.format(
+                'fixed (published CPG order)' if not args.order_seed
+                else 'shuffled, order-seed {} -> {}'.format(args.order_seed, ', '.join(tasks))))
             f.write('avg retained acc {:.2f}%  BWT {:+.3f}%  frozen-weight-drift {:.2e}  logit-drift {:.2e}\n'.format(
                 avg_retained, bwt, weight_drift, max_logit_drift))
             f.write('cAPF {:.1f} %/GFLOP ({:.4f} GFLOPs merged)  adapter {:.3f}M params/task\n'.format(

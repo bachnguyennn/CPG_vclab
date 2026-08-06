@@ -1,0 +1,119 @@
+pretrained init: loaded 831 tensors (1.75M params, 102% of model, 5 attn-bias interpolated), skipped 19
+  skipped by category: {'attn_bias': 5, 'head': 14}
+
+=== [floor] TASK 1/20: aquatic_mammals ===
+after task 1: aquati=65.8
+cumulative: avg acc 65.80%  storage 6.99 MB
+
+=== [floor] TASK 2/20: fish ===
+after task 2: aquati=65.8  fish=75.2
+cumulative: avg acc 70.50%  storage 7.24 MB
+
+=== [floor] TASK 3/20: flowers ===
+after task 3: aquati=65.8  fish=75.2  flower=75.8
+cumulative: avg acc 72.27%  storage 7.49 MB
+
+=== [floor] TASK 4/20: food_containers ===
+after task 4: aquati=65.8  fish=75.2  flower=75.8  food_c=79.0
+cumulative: avg acc 73.95%  storage 7.74 MB
+
+=== [floor] TASK 5/20: fruit_and_vegetables ===
+after task 5: aquati=65.8  fish=75.2  flower=75.8  food_c=79.0  fruit_=84.6
+cumulative: avg acc 76.08%  storage 7.99 MB
+
+=== [floor] TASK 6/20: household_electrical_devices ===
+after task 6: aquati=65.8  fish=75.2  flower=75.8  food_c=79.0  fruit_=84.6  househ=85.2
+cumulative: avg acc 77.60%  storage 8.24 MB
+
+=== [floor] TASK 7/20: household_furniture ===
+after task 7: aquati=65.8  fish=75.2  flower=75.8  food_c=79.0  fruit_=84.6  househ=85.2  househ=76.0
+cumulative: avg acc 77.37%  storage 8.49 MB
+
+=== [floor] TASK 8/20: insects ===
+after task 8: aquati=65.8  fish=75.2  flower=75.8  food_c=79.0  fruit_=84.6  househ=85.2  househ=76.0  insect=81.6
+cumulative: avg acc 77.90%  storage 8.74 MB
+
+=== [floor] TASK 9/20: large_carnivores ===
+after task 9: aquati=65.8  fish=75.2  flower=75.8  food_c=79.0  fruit_=84.6  househ=85.2  househ=76.0  insect=81.6  large_=81.0
+cumulative: avg acc 78.24%  storage 9.00 MB
+
+=== [floor] TASK 10/20: large_man-made_outdoor_things ===
+after task 10: aquati=65.8  fish=75.2  flower=75.8  food_c=79.0  fruit_=84.6  househ=85.2  househ=76.0  insect=81.6  large_=81.0  large_=84.0
+cumulative: avg acc 78.82%  storage 9.25 MB
+
+=== [floor] TASK 11/20: large_natural_outdoor_scenes ===
+after task 11: aquati=65.8  fish=75.2  flower=75.8  food_c=79.0  fruit_=84.6  househ=85.2  househ=76.0  insect=81.6  large_=81.0  large_=84.0  large_=84.6
+cumulative: avg acc 79.35%  storage 9.50 MB
+
+=== [floor] TASK 12/20: large_omnivores_and_herbivores ===
+after task 12: aquati=65.8  fish=75.2  flower=75.8  food_c=79.0  fruit_=84.6  househ=85.2  househ=76.0  insect=81.6  large_=81.0  large_=84.0  large_=84.6  large_=79.2
+cumulative: avg acc 79.33%  storage 9.75 MB
+
+=== [floor] TASK 13/20: medium_mammals ===
+after task 13: aquati=65.8  fish=75.2  flower=75.8  food_c=79.0  fruit_=84.6  househ=85.2  househ=76.0  insect=81.6  large_=81.0  large_=84.0  large_=84.6  large_=79.2  medium=80.4
+cumulative: avg acc 79.42%  storage 10.00 MB
+
+=== [floor] TASK 14/20: non-insect_invertebrates ===
+after task 14: aquati=65.8  fish=75.2  flower=75.8  food_c=79.0  fruit_=84.6  househ=85.2  househ=76.0  insect=81.6  large_=81.0  large_=84.0  large_=84.6  large_=79.2  medium=80.4  non-in=84.4
+cumulative: avg acc 79.77%  storage 10.25 MB
+
+=== [floor] TASK 15/20: people ===
+after task 15: aquati=65.8  fish=75.2  flower=75.8  food_c=79.0  fruit_=84.6  househ=85.2  househ=76.0  insect=81.6  large_=81.0  large_=84.0  large_=84.6  large_=79.2  medium=80.4  non-in=84.4  people=47.6
+cumulative: avg acc 77.63%  storage 10.50 MB
+
+=== [floor] TASK 16/20: reptiles ===
+after task 16: aquati=65.8  fish=75.2  flower=75.8  food_c=79.0  fruit_=84.6  househ=85.2  househ=76.0  insect=81.6  large_=81.0  large_=84.0  large_=84.6  large_=79.2  medium=80.4  non-in=84.4  people=47.6  reptil=76.0
+cumulative: avg acc 77.53%  storage 10.75 MB
+
+=== [floor] TASK 17/20: small_mammals ===
+after task 17: aquati=65.8  fish=75.2  flower=75.8  food_c=79.0  fruit_=84.6  househ=85.2  househ=76.0  insect=81.6  large_=81.0  large_=84.0  large_=84.6  large_=79.2  medium=80.4  non-in=84.4  people=47.6  reptil=76.0  small_=71.6
+cumulative: avg acc 77.18%  storage 11.01 MB
+
+=== [floor] TASK 18/20: trees ===
+after task 18: aquati=65.8  fish=75.2  flower=75.8  food_c=79.0  fruit_=84.6  househ=85.2  househ=76.0  insect=81.6  large_=81.0  large_=84.0  large_=84.6  large_=79.2  medium=80.4  non-in=84.4  people=47.6  reptil=76.0  small_=71.6  trees=69.4
+cumulative: avg acc 76.74%  storage 11.26 MB
+
+=== [floor] TASK 19/20: vehicles_1 ===
+after task 19: aquati=65.8  fish=75.2  flower=75.8  food_c=79.0  fruit_=84.6  househ=85.2  househ=76.0  insect=81.6  large_=81.0  large_=84.0  large_=84.6  large_=79.2  medium=80.4  non-in=84.4  people=47.6  reptil=76.0  small_=71.6  trees=69.4  vehicl=83.0
+cumulative: avg acc 77.07%  storage 11.51 MB
+
+=== [floor] TASK 20/20: vehicles_2 ===
+after task 20: aquati=65.8  fish=75.2  flower=75.8  food_c=79.0  fruit_=84.6  househ=85.2  househ=76.0  insect=81.6  large_=81.0  large_=84.0  large_=84.6  large_=79.2  medium=80.4  non-in=84.4  people=47.6  reptil=76.0  small_=71.6  trees=69.4  vehicl=83.0  vehicl=88.0
+cumulative: avg acc 77.62%  storage 11.76 MB
+
+==========================================================================
+Floor-only control (no adapter) : per-task accuracy (col = after task N)
+==========================================================================
+task \ after      1      2      3      4      5      6      7      8      9     10     11     12     13     14     15     16     17     18     19     20
+aquatic_mamm   65.8   65.8   65.8   65.8   65.8   65.8   65.8   65.8   65.8   65.8   65.8   65.8   65.8   65.8   65.8   65.8   65.8   65.8   65.8   65.8
+fish            -     75.2   75.2   75.2   75.2   75.2   75.2   75.2   75.2   75.2   75.2   75.2   75.2   75.2   75.2   75.2   75.2   75.2   75.2   75.2
+flowers         -      -     75.8   75.8   75.8   75.8   75.8   75.8   75.8   75.8   75.8   75.8   75.8   75.8   75.8   75.8   75.8   75.8   75.8   75.8
+food_contain    -      -      -     79.0   79.0   79.0   79.0   79.0   79.0   79.0   79.0   79.0   79.0   79.0   79.0   79.0   79.0   79.0   79.0   79.0
+fruit_and_ve    -      -      -      -     84.6   84.6   84.6   84.6   84.6   84.6   84.6   84.6   84.6   84.6   84.6   84.6   84.6   84.6   84.6   84.6
+household_el    -      -      -      -      -     85.2   85.2   85.2   85.2   85.2   85.2   85.2   85.2   85.2   85.2   85.2   85.2   85.2   85.2   85.2
+household_fu    -      -      -      -      -      -     76.0   76.0   76.0   76.0   76.0   76.0   76.0   76.0   76.0   76.0   76.0   76.0   76.0   76.0
+insects         -      -      -      -      -      -      -     81.6   81.6   81.6   81.6   81.6   81.6   81.6   81.6   81.6   81.6   81.6   81.6   81.6
+large_carniv    -      -      -      -      -      -      -      -     81.0   81.0   81.0   81.0   81.0   81.0   81.0   81.0   81.0   81.0   81.0   81.0
+large_man-ma    -      -      -      -      -      -      -      -      -     84.0   84.0   84.0   84.0   84.0   84.0   84.0   84.0   84.0   84.0   84.0
+large_natura    -      -      -      -      -      -      -      -      -      -     84.6   84.6   84.6   84.6   84.6   84.6   84.6   84.6   84.6   84.6
+large_omnivo    -      -      -      -      -      -      -      -      -      -      -     79.2   79.2   79.2   79.2   79.2   79.2   79.2   79.2   79.2
+medium_mamma    -      -      -      -      -      -      -      -      -      -      -      -     80.4   80.4   80.4   80.4   80.4   80.4   80.4   80.4
+non-insect_i    -      -      -      -      -      -      -      -      -      -      -      -      -     84.4   84.4   84.4   84.4   84.4   84.4   84.4
+people          -      -      -      -      -      -      -      -      -      -      -      -      -      -     47.6   47.6   47.6   47.6   47.6   47.6
+reptiles        -      -      -      -      -      -      -      -      -      -      -      -      -      -      -     76.0   76.0   76.0   76.0   76.0
+small_mammal    -      -      -      -      -      -      -      -      -      -      -      -      -      -      -      -     71.6   71.6   71.6   71.6
+trees           -      -      -      -      -      -      -      -      -      -      -      -      -      -      -      -      -     69.4   69.4   69.4
+vehicles_1      -      -      -      -      -      -      -      -      -      -      -      -      -      -      -      -      -      -     83.0   83.0
+vehicles_2      -      -      -      -      -      -      -      -      -      -      -      -      -      -      -      -      -      -      -     88.0
+--------------------------------------------------------------------------
+avg RETAINED accuracy (after all tasks)  : 77.62%
+max ACCURACY drift after a task learned  : 0.000%
+Backward Transfer (BWT, ~0 = no forget)  : +0.000%
+max FROZEN-WEIGHT drift (bit-exact)      : 0.00e+00
+max LOGIT drift (function preserved)     : 0.00e+00
+
+inference (LoRA merged): 0.0230 GFLOPs, 1.72M backbone params
+per-task floor    cost   : 0.063M params/task (0.25 MB fp32-store measured), grows linearly with tasks
+cAPF = 3379.3 %/GFLOP
+
+wrote cvit_floor_20task_S_128.txt

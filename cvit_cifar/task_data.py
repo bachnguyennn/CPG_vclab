@@ -4,6 +4,7 @@ Same task decomposition as the VGG CPG experiment 1. Slices the torch-free
 cifar100_32.npz by fine label; remaps each task's 5 fine labels to 0..4.
 """
 import os
+import random
 
 import numpy as np
 import torch
@@ -79,8 +80,18 @@ TASK_FINE_IDX.update(PAIR_FINE_IDX)
 SPLITS = {'super20': TASKS, 'pair50': TASKS_PAIR50}
 
 
-def get_tasks(split='super20'):
-    return SPLITS[split]
+def get_tasks(split='super20', order_seed=0):
+    """Task sequence. order_seed=0 keeps the fixed published CPG order
+    (aquatic_mammals first, vehicles_2 last) used by every headline run;
+    a nonzero seed returns a deterministic shuffle of the same task set, for
+    the order-dependence ablation. Per-task data is untouched -- only the
+    sequence changes, so LoRA (which re-derives each adapter from the pristine
+    backbone) is order-invariant by construction while CPG, whose later tasks
+    build on earlier tasks' frozen weights, need not be."""
+    ts = list(SPLITS[split])
+    if order_seed:
+        random.Random(order_seed).shuffle(ts)
+    return ts
 
 
 def num_classes(task):

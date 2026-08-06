@@ -160,6 +160,10 @@ def main():
                     help='use train-time augmentation, re-extracting features per epoch '
                          '(matches LoRA recipe; slower). Default: canonical un-augmented probe.')
     ap.add_argument('--seed', type=int, default=1)
+    ap.add_argument('--order-seed', type=int, default=0,
+                    help='accepted for symmetry with the CPG/LoRA trainers; the probe is '
+                         'order-invariant by construction (heads are independent), so this '
+                         'only permutes the reporting order')
     ap.add_argument('--results-file', type=str, default='')
     args = ap.parse_args()
 
@@ -171,7 +175,7 @@ def main():
     base, feat_dim = build_backbone(args.variant, args.img_size, not args.no_pretrained)
     frozen_ref = float(sum(p.double().sum() for p in base.parameters()))
 
-    tasks = get_tasks(args.split)[:args.tasks]
+    tasks = get_tasks(args.split, args.order_seed)[:args.tasks]
     accs = {}
     for k, task in enumerate(tasks, start=1):
         ncls = num_classes(task)
