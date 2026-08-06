@@ -1,10 +1,18 @@
 """Figure: CViT-CPG accuracy vs inference compute Pareto (20-task CIFAR-100).
 
-All points have frozen-weight drift 0.00e+00; the @128 headline CPG and LoRA
-points are post-attention-bias-fix exact-zero-forgetting runs. Log-x GFLOPs,
-retained accuracy on y. Two CViT series (32px partial-transfer family, 128px
-full-transfer headline points) vs the VGG16 references. Output:
-pareto_figure.png (300 dpi) + .pdf for the paper.
+This is the figure the report leads with for every efficiency claim (cAPF is a
+convenience column only -- see Section 7). Log-x GFLOPs, retained accuracy on y.
+Two CViT series (32px partial-transfer family, 128px full-transfer headline
+points) vs the VGG16 references, plus the two mechanism-ladder rungs of Section
+9.7: the linear probe and the floor-only control, both at S@128's compute since
+both run the plain backbone at inference. The shaded band between them and the
+dashed floor line make the mechanism contribution readable directly: everything
+above the floor line is what continual learning buys over per-task normalization
+state that any exact-guarantee method on this backbone stores anyway.
+
+All points have frozen-weight drift 0.00e+00; the @128 points are
+post-attention-bias-fix exact-zero-forgetting runs. Output: pareto_figure.png
+(300 dpi) + .pdf for the paper.
 """
 import matplotlib
 matplotlib.use('Agg')
@@ -20,8 +28,14 @@ LORA_128 = [('LoRA S@128', 0.0230, 82.20, 0.26), ('LoRA XL@128', 0.1467, 84.53, 
 VGG_REPRO = ('VGG16-CPG (repro, scratch)', 0.7467, 78.61)
 VGG_PAPER = ('CPG paper (VGG16)', 0.7467, 81.2)
 VGG_PRETR = ('VGG16-CPG (ImageNet-pretrained)', 0.7467, 81.66)
+# mechanism-ladder rungs on the same frozen S@128 backbone (Section 9.7). Both run
+# the plain backbone at inference, so they sit at S@128's compute, 0.0230 GFLOPs.
+# floor = per-task BN/bias/attn-bias/head, no adapter (3 seeds); probe = frozen
+# features + per-task linear head (1 seed).
+FLOOR_128 = ('Floor-only control (no adapter)', 0.0230, 77.97, 0.34)
+PROBE_128 = ('Linear probe (frozen features)', 0.0230, 69.51, 0.0)
 
-fig, ax = plt.subplots(figsize=(7.0, 4.6))
+fig, ax = plt.subplots(figsize=(7.2, 5.9))
 
 xs, ys = [p[1] for p in CVIT_32], [p[2] for p in CVIT_32]
 ax.plot(xs, ys, 'o-', color='#4878CF', lw=1.5, ms=7, label='CViT-CPG @32 (partial pretrained transfer)')
@@ -56,6 +70,20 @@ ax.plot(VGG_PRETR[1], VGG_PRETR[2], 'v', color='#B8860B', ms=9, label=VGG_PRETR[
 ax.annotate('VGG16-CPG pretrained (81.7)', (VGG_PRETR[1], VGG_PRETR[2]),
             textcoords='offset points', xytext=(-8, 8), ha='right', fontsize=8.5, color='#B8860B')
 
+# --- mechanism-ladder rungs: everything above the floor line is what CL buys ---
+ax.axhspan(PROBE_128[2], FLOOR_128[2], color='#9467BD', alpha=0.055, zorder=0)
+ax.axhline(FLOOR_128[2], color='#9467BD', lw=1.1, ls='--', alpha=0.85, zorder=1)
+ax.errorbar([FLOOR_128[1]], [FLOOR_128[2]], yerr=[FLOOR_128[3]], fmt='P', color='#9467BD',
+            ms=10, capsize=4, ecolor='#9467BD', elinewidth=1.2, zorder=5,
+            label='Floor-only control @128 (no mechanism, 3 seeds)')
+ax.plot(PROBE_128[1], PROBE_128[2], 'P', mfc='none', mec='#9467BD', mew=1.6, ms=10, zorder=5,
+        label='Linear probe @128 (frozen features + head)')
+ax.annotate('mechanism-free floor 78.0  (CPG +2.1, LoRA +4.2 above it)',
+            (0.032, FLOOR_128[2]), textcoords='offset points', xytext=(0, 6),
+            ha='left', fontsize=8, color='#9467BD', fontweight='bold')
+ax.annotate('probe 69.5', (PROBE_128[1], PROBE_128[2]), textcoords='offset points',
+            xytext=(9, -3), ha='left', fontsize=8.5, color='#9467BD')
+
 ax.axhline(VGG_PAPER[2], color='#999999', lw=0.8, ls=':')
 # arrows showing the resolution unlock (same geometry, full transfer)
 for (na, xa, ya), (nb, xb, yb, _) in ((CVIT_32[0], CVIT_128[0]), (CVIT_32[3], CVIT_128[1])):
@@ -70,10 +98,12 @@ ax.set_xlim(0.015, 1.1)
 ax.set_xlabel('Inference compute (GFLOPs, log scale)')
 ax.set_ylabel('Avg retained accuracy after 20 tasks (%)')
 ax.set_title('Continual learning accuracy vs inference compute\n'
-             '(20-task CIFAR-100; @128 CPG/LoRA points are bit-exact zero forgetting)', fontsize=10.5)
-ax.set_ylim(69, 86.5)
+             '(20-task CIFAR-100; all @128 points are bit-exact zero forgetting)', fontsize=10.5)
+ax.set_ylim(67.5, 86.5)
 ax.grid(True, which='both', alpha=0.25)
-ax.legend(loc='lower right', fontsize=8.5, framealpha=0.9)
+# legend below the axes: in-plot placements cover the @32 L/XL points
+ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.155), ncol=2,
+          fontsize=8, framealpha=0.9, borderaxespad=0.)
 fig.tight_layout()
 fig.savefig('pareto_figure.png', dpi=300)
 fig.savefig('pareto_figure.pdf')

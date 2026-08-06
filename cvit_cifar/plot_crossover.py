@@ -20,10 +20,16 @@ import matplotlib.patheffects as pe
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 SERIES = [
-    # (label, results file, hex, linestyle)  -- categorical slots 1..3, fixed order
+    # (label, results file, hex, linestyle)  -- categorical slots 1..3, fixed order.
+    # NB: the crossover marker below indexes data[0]=CPG and data[1]=r8, so new
+    # arms must be appended, not inserted.
     ('CPG masks',  'cvit_cpg_pair50_S_128_seed1.txt',      '#2a78d6', '-'),
     ('LoRA r=8',   'cvit_lora_pair50_S_128_r8_seed1.txt',  '#1baf7a', '-'),
     ('LoRA r=2',   'cvit_lora_pair50_S_128_r2_seed1.txt',  '#eda100', '-'),
+    # the mechanism-free floor both arms pay for (Section 9.7 rung 1): per-task
+    # BN/bias/attn-bias/head, no mask and no adapter. It is the reference line
+    # the two mechanisms have to earn their extra storage against.
+    ('Floor (no mech.)', 'cvit_lora_pair50_S_128_r0_seed1.txt', '#9467bd', '-'),
 ]
 
 # matched-precision arms (Section 9.9), overlaid with --fp16 as dashed curves
