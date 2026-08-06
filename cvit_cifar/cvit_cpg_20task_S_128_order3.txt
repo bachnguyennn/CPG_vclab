@@ -1,0 +1,52 @@
+CViT-CPG : 20 tasks
+task order: shuffled, order-seed 3 -> large_carnivores, food_containers, household_furniture, household_electrical_devices, reptiles, small_mammals, flowers, medium_mammals, aquatic_mammals, fish, non-insect_invertebrates, large_natural_outdoor_scenes, vehicles_2, large_man-made_outdoor_things, people, large_omnivores_and_herbivores, fruit_and_vegetables, trees, vehicles_1, insects
+config: bn-mode=pertask store-mode=fp32 adaptive-sparsity=False
+avg retained acc 80.65%  BWT +0.000%  frozen-weight-drift 0.00e+00
+CViT-CPG cAPF 3511.2 %/GFLOP (0.0230 GFLOPs) vs VGG16-CPG 105.3 %/GFLOP -> 33.4x
+
+cumulative (storage-crossover curve): after task k, avg acc over tasks 1..k,
+deployable storage (fp32 backbone + ownership mask + binary piggymasks +
+per-task BN/bias/attn-bias/head), free-weight fraction
+  k  avg_acc  storage_MB  free_frac
+   1    81.20      7.196  0.6000   large_carnivores
+   2    80.90      7.869  0.3812   food_containers
+   3    81.27      8.330  0.2516   household_furniture
+   4    82.30      9.002  0.1735   household_electrical_devices
+   5    81.16      9.464  0.1268   reptiles
+   6    79.50      9.926  0.0989   small_mammals
+   7    79.40     10.387  0.0820   flowers
+   8    80.33     11.060  0.0719   medium_mammals
+   9    79.16     11.521  0.0661   aquatic_mammals
+  10    79.40     11.983  0.0630   fish
+  11    79.93     12.445  0.0609   non-insect_invertebrates
+  12    80.52     12.906  0.0598   large_natural_outdoor_scenes
+  13    81.54     13.368  0.0591   vehicles_2
+  14    82.00     13.830  0.0587   large_man-made_outdoor_things
+  15    80.01     14.291  0.0584   people
+  16    80.01     14.964  0.0583   large_omnivores_and_herbivores
+  17    80.39     15.425  0.0582   fruit_and_vegetables
+  18    79.99     15.887  0.0582   trees
+  19    80.39     16.349  0.0581   vehicles_1
+  20    80.65     16.810  0.0581   insects
+
+per-task retained accuracy (after all tasks):
+  large_carnivores                    81.2
+  food_containers                     80.6
+  household_furniture                 82.0
+  household_electrical_devices        85.4
+  reptiles                            76.6
+  small_mammals                       71.2
+  flowers                             78.8
+  medium_mammals                      86.8
+  aquatic_mammals                     69.8
+  fish                                81.6
+  non-insect_invertebrates            85.2
+  large_natural_outdoor_scenes        87.0
+  vehicles_2                          93.8
+  large_man-made_outdoor_things       88.0
+  people                              52.2
+  large_omnivores_and_herbivores      80.0
+  fruit_and_vegetables                86.4
+  trees                               73.2
+  vehicles_1                          87.6
+  insects                             85.6

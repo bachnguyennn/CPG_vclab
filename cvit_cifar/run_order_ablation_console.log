@@ -1,0 +1,10 @@
+[2026-08-06 08:27:53] CPG S@128 20-task, order-seed 2
+[2026-08-06 09:31:13]   -> exit 0
+[2026-08-06 09:31:14] CPG S@128 20-task, order-seed 3
+[2026-08-06 10:35:03]   -> exit 0
+[2026-08-06 10:35:03] LoRA r=8 S@128 20-task, order-seed 2 (null control)
+[2026-08-06 11:34:21]   -> exit 0
+[2026-08-06 11:34:22] ALL DONE
+cvit_cpg_20task_S_128_order2.txt:avg retained acc 79.65%  BWT +0.000%  frozen-weight-drift 0.00e+00
+cvit_cpg_20task_S_128_order3.txt:avg retained acc 80.65%  BWT +0.000%  frozen-weight-drift 0.00e+00
+cvit_lora_20task_S_128_order2.txt:avg retained acc 81.93%  BWT +0.000%  frozen-weight-drift 0.00e+00  logit-drift 0.00e+00

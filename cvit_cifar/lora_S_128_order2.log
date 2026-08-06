@@ -1,0 +1,120 @@
+pretrained init: loaded 831 tensors (1.75M params, 102% of model, 5 attn-bias interpolated), skipped 19
+  skipped by category: {'attn_bias': 5, 'head': 14}
+task order (order-seed 2): insects, household_furniture, trees, large_carnivores, vehicles_2, reptiles, non-insect_invertebrates, aquatic_mammals, food_containers, large_man-made_outdoor_things, people, fruit_and_vegetables, large_natural_outdoor_scenes, medium_mammals, small_mammals, household_electrical_devices, large_omnivores_and_herbivores, vehicles_1, flowers, fish
+
+=== [LoRA-r8] TASK 1/20: insects ===
+after task 1: insect=86.0
+cumulative: avg acc 86.00%  storage 7.91 MB
+
+=== [LoRA-r8] TASK 2/20: household_furniture ===
+after task 2: insect=86.0  househ=82.6
+cumulative: avg acc 84.30%  storage 9.08 MB
+
+=== [LoRA-r8] TASK 3/20: trees ===
+after task 3: insect=86.0  househ=82.6  trees=75.0
+cumulative: avg acc 81.20%  storage 10.25 MB
+
+=== [LoRA-r8] TASK 4/20: large_carnivores ===
+after task 4: insect=86.0  househ=82.6  trees=75.0  large_=86.0
+cumulative: avg acc 82.40%  storage 11.43 MB
+
+=== [LoRA-r8] TASK 5/20: vehicles_2 ===
+after task 5: insect=86.0  househ=82.6  trees=75.0  large_=86.0  vehicl=94.6
+cumulative: avg acc 84.84%  storage 12.60 MB
+
+=== [LoRA-r8] TASK 6/20: reptiles ===
+after task 6: insect=86.0  househ=82.6  trees=75.0  large_=86.0  vehicl=94.6  reptil=79.4
+cumulative: avg acc 83.93%  storage 13.77 MB
+
+=== [LoRA-r8] TASK 7/20: non-insect_invertebrates ===
+after task 7: insect=86.0  househ=82.6  trees=75.0  large_=86.0  vehicl=94.6  reptil=79.4  non-in=86.0
+cumulative: avg acc 84.23%  storage 14.95 MB
+
+=== [LoRA-r8] TASK 8/20: aquatic_mammals ===
+after task 8: insect=86.0  househ=82.6  trees=75.0  large_=86.0  vehicl=94.6  reptil=79.4  non-in=86.0  aquati=70.6
+cumulative: avg acc 82.53%  storage 16.12 MB
+
+=== [LoRA-r8] TASK 9/20: food_containers ===
+after task 9: insect=86.0  househ=82.6  trees=75.0  large_=86.0  vehicl=94.6  reptil=79.4  non-in=86.0  aquati=70.6  food_c=80.6
+cumulative: avg acc 82.31%  storage 17.29 MB
+
+=== [LoRA-r8] TASK 10/20: large_man-made_outdoor_things ===
+after task 10: insect=86.0  househ=82.6  trees=75.0  large_=86.0  vehicl=94.6  reptil=79.4  non-in=86.0  aquati=70.6  food_c=80.6  large_=90.2
+cumulative: avg acc 83.10%  storage 18.46 MB
+
+=== [LoRA-r8] TASK 11/20: people ===
+after task 11: insect=86.0  househ=82.6  trees=75.0  large_=86.0  vehicl=94.6  reptil=79.4  non-in=86.0  aquati=70.6  food_c=80.6  large_=90.2  people=54.6
+cumulative: avg acc 80.51%  storage 19.64 MB
+
+=== [LoRA-r8] TASK 12/20: fruit_and_vegetables ===
+after task 12: insect=86.0  househ=82.6  trees=75.0  large_=86.0  vehicl=94.6  reptil=79.4  non-in=86.0  aquati=70.6  food_c=80.6  large_=90.2  people=54.6  fruit_=87.4
+cumulative: avg acc 81.08%  storage 20.81 MB
+
+=== [LoRA-r8] TASK 13/20: large_natural_outdoor_scenes ===
+after task 13: insect=86.0  househ=82.6  trees=75.0  large_=86.0  vehicl=94.6  reptil=79.4  non-in=86.0  aquati=70.6  food_c=80.6  large_=90.2  people=54.6  fruit_=87.4  large_=87.2
+cumulative: avg acc 81.55%  storage 21.98 MB
+
+=== [LoRA-r8] TASK 14/20: medium_mammals ===
+after task 14: insect=86.0  househ=82.6  trees=75.0  large_=86.0  vehicl=94.6  reptil=79.4  non-in=86.0  aquati=70.6  food_c=80.6  large_=90.2  people=54.6  fruit_=87.4  large_=87.2  medium=87.4
+cumulative: avg acc 81.97%  storage 23.16 MB
+
+=== [LoRA-r8] TASK 15/20: small_mammals ===
+after task 15: insect=86.0  househ=82.6  trees=75.0  large_=86.0  vehicl=94.6  reptil=79.4  non-in=86.0  aquati=70.6  food_c=80.6  large_=90.2  people=54.6  fruit_=87.4  large_=87.2  medium=87.4  small_=74.0
+cumulative: avg acc 81.44%  storage 24.33 MB
+
+=== [LoRA-r8] TASK 16/20: household_electrical_devices ===
+after task 16: insect=86.0  househ=82.6  trees=75.0  large_=86.0  vehicl=94.6  reptil=79.4  non-in=86.0  aquati=70.6  food_c=80.6  large_=90.2  people=54.6  fruit_=87.4  large_=87.2  medium=87.4  small_=74.0  househ=87.8
+cumulative: avg acc 81.84%  storage 25.50 MB
+
+=== [LoRA-r8] TASK 17/20: large_omnivores_and_herbivores ===
+after task 17: insect=86.0  househ=82.6  trees=75.0  large_=86.0  vehicl=94.6  reptil=79.4  non-in=86.0  aquati=70.6  food_c=80.6  large_=90.2  people=54.6  fruit_=87.4  large_=87.2  medium=87.4  small_=74.0  househ=87.8  large_=83.8
+cumulative: avg acc 81.95%  storage 26.68 MB
+
+=== [LoRA-r8] TASK 18/20: vehicles_1 ===
+after task 18: insect=86.0  househ=82.6  trees=75.0  large_=86.0  vehicl=94.6  reptil=79.4  non-in=86.0  aquati=70.6  food_c=80.6  large_=90.2  people=54.6  fruit_=87.4  large_=87.2  medium=87.4  small_=74.0  househ=87.8  large_=83.8  vehicl=86.8
+cumulative: avg acc 82.22%  storage 27.85 MB
+
+=== [LoRA-r8] TASK 19/20: flowers ===
+after task 19: insect=86.0  househ=82.6  trees=75.0  large_=86.0  vehicl=94.6  reptil=79.4  non-in=86.0  aquati=70.6  food_c=80.6  large_=90.2  people=54.6  fruit_=87.4  large_=87.2  medium=87.4  small_=74.0  househ=87.8  large_=83.8  vehicl=86.8  flower=80.6
+cumulative: avg acc 82.14%  storage 29.02 MB
+
+=== [LoRA-r8] TASK 20/20: fish ===
+after task 20: insect=86.0  househ=82.6  trees=75.0  large_=86.0  vehicl=94.6  reptil=79.4  non-in=86.0  aquati=70.6  food_c=80.6  large_=90.2  people=54.6  fruit_=87.4  large_=87.2  medium=87.4  small_=74.0  househ=87.8  large_=83.8  vehicl=86.8  flower=80.6  fish=78.0
+cumulative: avg acc 81.93%  storage 30.19 MB
+
+==========================================================================
+Per-task LoRA (rank 8) : per-task accuracy (col = after task N)
+==========================================================================
+task \ after      1      2      3      4      5      6      7      8      9     10     11     12     13     14     15     16     17     18     19     20
+insects        86.0   86.0   86.0   86.0   86.0   86.0   86.0   86.0   86.0   86.0   86.0   86.0   86.0   86.0   86.0   86.0   86.0   86.0   86.0   86.0
+household_fu    -     82.6   82.6   82.6   82.6   82.6   82.6   82.6   82.6   82.6   82.6   82.6   82.6   82.6   82.6   82.6   82.6   82.6   82.6   82.6
+trees           -      -     75.0   75.0   75.0   75.0   75.0   75.0   75.0   75.0   75.0   75.0   75.0   75.0   75.0   75.0   75.0   75.0   75.0   75.0
+large_carniv    -      -      -     86.0   86.0   86.0   86.0   86.0   86.0   86.0   86.0   86.0   86.0   86.0   86.0   86.0   86.0   86.0   86.0   86.0
+vehicles_2      -      -      -      -     94.6   94.6   94.6   94.6   94.6   94.6   94.6   94.6   94.6   94.6   94.6   94.6   94.6   94.6   94.6   94.6
+reptiles        -      -      -      -      -     79.4   79.4   79.4   79.4   79.4   79.4   79.4   79.4   79.4   79.4   79.4   79.4   79.4   79.4   79.4
+non-insect_i    -      -      -      -      -      -     86.0   86.0   86.0   86.0   86.0   86.0   86.0   86.0   86.0   86.0   86.0   86.0   86.0   86.0
+aquatic_mamm    -      -      -      -      -      -      -     70.6   70.6   70.6   70.6   70.6   70.6   70.6   70.6   70.6   70.6   70.6   70.6   70.6
+food_contain    -      -      -      -      -      -      -      -     80.6   80.6   80.6   80.6   80.6   80.6   80.6   80.6   80.6   80.6   80.6   80.6
+large_man-ma    -      -      -      -      -      -      -      -      -     90.2   90.2   90.2   90.2   90.2   90.2   90.2   90.2   90.2   90.2   90.2
+people          -      -      -      -      -      -      -      -      -      -     54.6   54.6   54.6   54.6   54.6   54.6   54.6   54.6   54.6   54.6
+fruit_and_ve    -      -      -      -      -      -      -      -      -      -      -     87.4   87.4   87.4   87.4   87.4   87.4   87.4   87.4   87.4
+large_natura    -      -      -      -      -      -      -      -      -      -      -      -     87.2   87.2   87.2   87.2   87.2   87.2   87.2   87.2
+medium_mamma    -      -      -      -      -      -      -      -      -      -      -      -      -     87.4   87.4   87.4   87.4   87.4   87.4   87.4
+small_mammal    -      -      -      -      -      -      -      -      -      -      -      -      -      -     74.0   74.0   74.0   74.0   74.0   74.0
+household_el    -      -      -      -      -      -      -      -      -      -      -      -      -      -      -     87.8   87.8   87.8   87.8   87.8
+large_omnivo    -      -      -      -      -      -      -      -      -      -      -      -      -      -      -      -     83.8   83.8   83.8   83.8
+vehicles_1      -      -      -      -      -      -      -      -      -      -      -      -      -      -      -      -      -     86.8   86.8   86.8
+flowers         -      -      -      -      -      -      -      -      -      -      -      -      -      -      -      -      -      -     80.6   80.6
+fish            -      -      -      -      -      -      -      -      -      -      -      -      -      -      -      -      -      -      -     78.0
+--------------------------------------------------------------------------
+avg RETAINED accuracy (after all tasks)  : 81.93%
+max ACCURACY drift after a task learned  : 0.000%
+Backward Transfer (BWT, ~0 = no forget)  : +0.000%
+max FROZEN-WEIGHT drift (bit-exact)      : 0.00e+00
+max LOGIT drift (function preserved)     : 0.00e+00
+
+inference (LoRA merged): 0.0230 GFLOPs, 1.72M backbone params
+per-task adapter  cost   : 0.293M params/task (1.17 MB fp32-store measured), grows linearly with tasks
+cAPF = 3567.0 %/GFLOP
+
+wrote cvit_lora_20task_S_128_order2.txt
