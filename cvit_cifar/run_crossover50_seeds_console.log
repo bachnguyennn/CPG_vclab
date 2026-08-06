@@ -1,0 +1,15 @@
+[2026-08-06 01:46:35] CPG masks S@128 pair50 seed 2
+[2026-08-06 02:59:14]   -> exit 0
+[2026-08-06 02:59:14] Floor-only (rank 0) S@128 pair50 seed 2
+[2026-08-06 03:42:15]   -> exit 0
+[2026-08-06 03:42:15] CPG masks S@128 pair50 seed 3
+[2026-08-06 04:54:37]   -> exit 0
+[2026-08-06 04:54:37] Floor-only (rank 0) S@128 pair50 seed 3
+[2026-08-06 05:37:41]   -> exit 0
+[2026-08-06 05:37:41] ALL DONE
+cvit_cpg_pair50_S_128_seed1.txt:avg retained acc 95.46%  BWT +0.000%  frozen-weight-drift 0.00e+00
+cvit_cpg_pair50_S_128_seed2.txt:avg retained acc 95.43%  BWT +0.000%  frozen-weight-drift 0.00e+00
+cvit_cpg_pair50_S_128_seed3.txt:avg retained acc 95.43%  BWT +0.000%  frozen-weight-drift 0.00e+00
+cvit_lora_pair50_S_128_r0_seed1.txt:avg retained acc 95.70%  BWT +0.000%  frozen-weight-drift 0.00e+00  logit-drift 0.00e+00
+cvit_lora_pair50_S_128_r0_seed2.txt:avg retained acc 95.69%  BWT +0.000%  frozen-weight-drift 0.00e+00  logit-drift 0.00e+00
+cvit_lora_pair50_S_128_r0_seed3.txt:avg retained acc 95.73%  BWT +0.000%  frozen-weight-drift 0.00e+00  logit-drift 0.00e+00
